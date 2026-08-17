@@ -50,7 +50,7 @@ public class BinLookupClient {
      */
     public Optional<String> getIssuerId(String pan) {
         if (pan == null || pan.length() < 6) {
-            log.warn("Bin lookup skipped: PAN too short");
+            LOG.warn("Bin lookup skipped: PAN too short");
             return Optional.empty();
         }
         String bin = pan.substring(0, 6);
