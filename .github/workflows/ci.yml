@@ -15,7 +15,9 @@ on:
     - '.env.example'
     - 'docs/api/**'
     - 'scripts/smoke-test.sh'
+    - 'scripts/smoke-test.ps1'
     - 'scripts/load-smoke.sh'
+    - 'tz/**'
   pull_request:
     branches: [ main ]
     paths:
@@ -25,7 +27,9 @@ on:
     - '.env.example'
     - 'docs/api/**'
     - 'scripts/smoke-test.sh'
+    - 'scripts/smoke-test.ps1'
     - 'scripts/load-smoke.sh'
+    - 'tz/**'
 
 jobs:
   base-lint:
