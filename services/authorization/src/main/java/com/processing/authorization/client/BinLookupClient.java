@@ -20,7 +20,7 @@ import java.util.Optional;
 @Component
 public class BinLookupClient {
 
-    private static final Logger log = LoggerFactory.getLogger(BinLookupClient.class);
+    private static final Logger LOG = LoggerFactory.getLogger(BinLookupClient.class);
 
     private final RestClient restClient;
     private final String binLookupUrl;
@@ -60,10 +60,10 @@ public class BinLookupClient {
                     .retrieve()
                     .body(BinLookupResponse.class);
             String issuerId = response != null ? response.issuerId() : null;
-            log.debug("Bin lookup OK: bin={} -> issuerId={}", bin, issuerId);
+            LOG.debug("Bin lookup OK: bin={} -> issuerId={}", bin, issuerId);
             return Optional.ofNullable(issuerId);
         } catch (Exception e) {
-            log.warn("Bin lookup failed for bin={}: {}", bin, e.getMessage());
+            LOG.warn("Bin lookup failed for bin={}: {}", bin, e.getMessage());
             return Optional.empty();
         }
     }
