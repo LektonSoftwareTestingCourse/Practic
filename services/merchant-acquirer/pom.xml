@@ -14,10 +14,6 @@
     <name>merchant-acquirer</name>
     <description>Microservice for СМП processing simulator</description>
 
-    <properties>
-        <testcontainers.version>1.21.4</testcontainers.version>
-    </properties>
-
     <dependencies>
         <!-- Web (REST API) -->
         <dependency>

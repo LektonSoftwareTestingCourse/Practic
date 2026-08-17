@@ -20,7 +20,6 @@
     <properties>
         <mapstruct.version>1.6.3</mapstruct.version>
         <datafaker.version>2.5.4</datafaker.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
