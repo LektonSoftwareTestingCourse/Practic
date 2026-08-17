@@ -1,0 +1,60 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - gateway:8080
+        labels:
+          application: gateway
+
+  - job_name: card-management
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - card-management:8080
+        labels:
+          application: card-management
+
+  - job_name: switch
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - switch:8080
+        labels:
+          application: switch
+
+  - job_name: authorization
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - authorization:8080
+        labels:
+          application: authorization
+
+  - job_name: terminal-simulator
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - terminal-simulator:8080
+        labels:
+          application: terminal-simulator
+
+  - job_name: merchant-acquirer
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - merchant-acquirer:8080
+        labels:
+          application: merchant-acquirer
+
+  - job_name: transaction-logger
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - transaction-logger:8080
+        labels:
+          application: transaction-logger

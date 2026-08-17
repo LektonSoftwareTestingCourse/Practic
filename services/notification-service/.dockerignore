@@ -1,0 +1,14 @@
+target/
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.log
+*.tmp
+.git
+.gitignore
+.idea/
+*.iml
+.vscode/
+**/node_modules/

@@ -1,0 +1,15 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.33.0
+httpx>=0.28.0
+pydantic>=2.10.0
+python-dotenv>=1.0.0
+
+# Database (раскомментируй, если нужен PostgreSQL)
+# sqlalchemy>=2.0.36
+# asyncpg>=0.30.0
+# alembic>=1.14.0
+
+# Dev
+pytest>=8.3.0
+pytest-asyncio>=0.25.0
+flake8>=7.1.0

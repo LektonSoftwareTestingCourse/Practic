@@ -1,0 +1,1530 @@
+openapi: 3.0.0
+info:
+  title: СМП (Система медленных платежей) API
+  version: 1.0.0
+  description: |
+    Единая спецификация API-контрактов для взаимодействия микросервисов СМП.
+
+servers:
+  - url: http://localhost:8080
+    description: Gateway (единственная точка входа для внешних клиентов)
+  - url: http://localhost:8081
+    description: Switch Service
+  - url: http://localhost:8082
+    description: Authorization Service
+  - url: http://localhost:8083
+    description: Card Management Service
+  - url: http://localhost:8084
+    description: Terminal Simulator
+  - url: http://localhost:8085
+    description: Merchant Simulator
+  - url: http://localhost:8088
+    description: Transaction Logger
+
+tags:
+  - name: Health
+    description: Проверка работоспособности сервисов
+  - name: Cards
+    description: Управление банковскими картами
+  - name: Transactions
+    description: Приём и поиск транзакций
+  - name: Simulator
+    description: Симуляторы терминалов и мерчантов
+  - name: Dashboard
+    description: Данные для веб-дашборда (статистика, графики, последние транзакции)
+  - name: Internal
+    description: Внутренние межсервисные вызовы (не доступны извне, только через Gateway)
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Проверка работоспособности Gateway и downstream-сервисов
+      description:
+        Возвращает статус самого Gateway и результат health-check каждого downstream-сервиса
+        (Switch, Authorization, Card Management, Logger).
+      operationId: gatewayHealth
+      responses:
+        '200':
+          description: Все сервисы работают штатно
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayHealth'
+              example:
+                status: "ok"
+                service: "gateway"
+                version: "1.0.0"
+                services:
+                  switch: "ok"
+                  authorization: "ok"
+                  cardManagement: "ok"
+                  logger: "ok"
+        '503':
+          description: Один или несколько downstream-сервисов недоступны
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GatewayHealth'
+              example:
+                status: "degraded"
+                service: "gateway"
+                version: "1.0.0"
+                services:
+                  switch: "ok"
+                  authorization: "unavailable"
+                  cardManagement: "ok"
+                  logger: "ok"
+
+  /api/cards:
+    post:
+      tags: [Cards]
+      summary: Создать новую банковскую карту
+      description:
+        Создаёт карту с автоматической генерацией PAN по алгоритму Луна.
+        Срок действия = текущая дата + 3 года. Начальный статус - ACTIVE.
+      operationId: createCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardCreateRequest'
+      responses:
+        '201':
+          description: Карта успешно создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Ошибка валидации (некорректный BIN, имя и т.п.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    get:
+      tags: [Cards]
+      summary: Получить список карт с пагинацией и фильтрами
+      description: Основной эндпоинт для получения пула карт. Карты со статусом DELETED не возвращаются.
+      operationId: listCards
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+          description: Количество карт на странице
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Смещение от начала выборки
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE, BLOCKED, EXPIRED]
+          description: Фильтр по статусу карты
+        - name: bin
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{6}$'
+          description: Фильтр по BIN (первые 6 цифр PAN)
+        - name: issuerId
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Z0-9]+$'
+          description: Идентификатор банка эмитента
+        - name: startDate
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: date-time
+          description: Минимальная дата создания
+        - name: endDate
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: date-time
+          description: Максимальная дата создания
+      responses:
+        '200':
+          description: Список карт
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [total, cards]
+                properties:
+                  total:
+                    type: integer
+                    description: Общее количество карт, удовлетворяющих фильтрам
+                    example: 100
+                  cards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Card'
+        '400':
+          description: Ошибка валидации (некорректный BIN, имя и т.п.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/cards/generate:
+    post:
+      tags: [Cards]
+      summary: Массовая генерация тестовых карт
+      description: |
+        Генерирует указанное количество тестовых карт, равномерно распределённых по заданным BIN.
+        Используется симуляторами и операторами для наполнения системы тестовыми данными
+        перед запуском сценариев. Для каждой карты генерируется случайное имя держателя,
+        баланс (10k–500k ₽), дневной лимит (50k–300k ₽) и месячный лимит (дневной × 30).
+        Распределение статусов: ACTIVE 95%, INACTIVE 3%, BLOCKED 2%.
+      operationId: generateCards
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCardsRequest'
+      responses:
+        '201':
+          description: Карты успешно сгенерированы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateCardsResponse'
+        '400':
+          description: Ошибка валидации (пустой bins, count = 0 и т.п.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/cards/{pan}:
+    get:
+      tags: [Cards]
+      summary: Получить карту по PAN
+      description:
+        Возвращает полные данные карты, включая баланс и лимиты.
+      operationId: getCardByPan
+      parameters:
+        - name: pan
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 16
+          description: Primary Account Number - полный номер карты (16 цифр)
+      responses:
+        '200':
+          description: Карта найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Ошибка валидации (некорректный BIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Карта не найдена или удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags: [Cards]
+      summary: Частично обновить параметры карты
+      description: |
+        Позволяет изменить статус карты, лимиты или баланс. В теле запроса передаются
+        только изменяемые поля. Например, блокировка карты: `{"status": "BLOCKED"}`.
+      operationId: updateCard
+      parameters:
+        - name: pan
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CardUpdateRequest'
+      responses:
+        '200':
+          description: Карта обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Ошибка валидации (некорректный BIN, status и т.п.)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Карта не найдена или удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags: [Cards]
+      summary: Мягко удалить карту
+      description:
+        Переводит карту в статус DELETED. Удалённая карта не возвращается в GET-запросах
+        и не участвует в транзакциях.
+      operationId: deleteCard
+      parameters:
+        - name: pan
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 16
+      responses:
+        '204':
+          description: Карта успешно удалена
+        '400':
+          description: Ошибка валидации (некорректный BIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Карта не найдена или удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/cards/{pan}/reserve:
+    post:
+      tags: [Cards]
+      summary: Зарезервировать средства на карте
+      description:
+        Вызывается Authorization Service после успешной авторизации транзакции.
+        Уменьшает `availableBalance` карты на указанную сумму.
+      operationId: reserveFunds
+      parameters:
+        - name: pan
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReserveRequest'
+      responses:
+        '200':
+          description: Средства успешно зарезервированы
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '402':
+          description: Недостаточно средств для резервирования
+        '400':
+          description: Ошибка валидации (некорректный BIN, неположительная сумма)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Карта не найдена или удалена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/cards/{pan}/rollback:
+    post:
+      tags: [ Cards ]
+      summary: Вернуть средства на счет
+      description:
+        Вызывается Authorization Service при ошибке транзакции.
+        Возвращает в `availableBalance` карты указанную сумму.
+      operationId: rollbackFunds
+      parameters:
+        - name: pan
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 16
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '200':
+          description: Средства успешно возвращены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400':
+          description: Ошибка валидации (некорректный BIN, неположительная сумма)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Карта или операция не найдена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Средства по операции уже были возвращены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/transactions:
+    post:
+      tags: [Transactions]
+      summary: Отправить запрос на авторизацию транзакции
+      description:
+        Главный входной эндпоинт. Gateway валидирует запрос и отправляет его в Switch.
+        Switch определяет эмитента по BIN, передаёт запрос в Authorization Service,
+        получает решение и записывает транзакцию в Logger. Возвращает итоговый ответ авторизации.
+      operationId: authorizeTransaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '200':
+          description: Результат авторизации (успех или отказ)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+        '400':
+          description: Ошибка валидации запроса
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "VALIDATION_ERROR"
+                message: "Field 'pan' must be exactly 16 digits"
+                timestamp: "2026-06-01T10:30:00Z"
+        '429':
+          description: Превышен rate-limit (100 запросов в секунду)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "RATE_LIMIT_EXCEEDED"
+                message: "Too many requests. Try again later."
+                retryAfterMs: 1000
+        '503':
+          description: Downstream-сервис недоступен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "SERVICE_UNAVAILABLE"
+                message: "Authorization service is temporarily unavailable"
+                serviceName: "authorization"
+
+  /api/transactions/search:
+    get:
+      tags: [Transactions]
+      summary: Поиск транзакций с фильтрацией и постраничной навигацией
+      description: |
+        Поиск по журналу транзакций. Все фильтры опциональны и объединяются через AND.
+        Пагинация offset-based; `limit` (размер страницы) и `offset` (смещение от начала).
+      operationId: searchTransactions
+      parameters:
+        - name: pan
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{16}$'
+          description: Фильтр по номеру карты
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [APPROVED, DECLINED]
+          description: Фильтр по итоговому статусу транзакции
+        - name: dateFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: |
+            Нижняя граница по дате транзакции (включительно).
+            Пример: `2026-06-01`
+        - name: dateTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: |
+            Верхняя граница по дате транзакции (включительно, до конца суток).
+            Пример: `2026-06-01`
+        - name: merchantId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID мерчанта (торговой точки)
+        - name: issuerId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID банка-эмитента
+        - name: mcc
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{4}$'
+          description: Фильтр по коду категории мерчанта (MCC)
+        - name: declineReason
+          in: query
+          required: false
+          schema:
+            type: string
+          description: |
+            Полнотекстовый поиск по причине отказа.
+            Перед поиском `_` и `-` нормализуются в пробелы, регистр игнорируется.
+            Примеры совпадающих запросов для `CARD_NOT_FOUND`:
+            `CARD_NOT_FOUND`, `card_not_found`, `card not found`, `card`, `found`.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 500
+          description: Количество транзакций на странице
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Смещение от начала выборки (offset-пагинация)
+      responses:
+        '200':
+          description: Результаты поиска
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionSearchResponse'
+        '400':
+          description: Невалидные параметры (например, `limit <= 0` или `offset < 0`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/transactions/export:
+    get:
+      tags: [ Transactions ]
+      summary: Экспорт транзакций в CSV
+      description: |
+        Выгружает транзакции, удовлетворяющие фильтру, в CSV (сортировка createdAt DESC).
+        Параметры фильтра те же, что у /api/transactions/search, кроме limit/offset — они не применяются.
+        Экспорт ограничен 50 000 строк: если под фильтр попадает больше, выгружаются первые 50 000.
+      operationId: exportTransactions
+      parameters:
+        - name: pan
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{16}$'
+          description: Фильтр по номеру карты
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [ APPROVED, DECLINED ]
+          description: Фильтр по итоговому статусу транзакции
+        - name: dateFrom
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Нижняя граница по дате транзакции (включительно)
+        - name: dateTo
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Верхняя граница по дате транзакции (включительно, до конца суток)
+        - name: merchantId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID мерчанта
+        - name: issuerId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Фильтр по ID банка-эмитента
+        - name: mcc
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^\d{4}$'
+          description: Фильтр по коду категории мерчанта (MCC)
+        - name: declineReason
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Полнотекстовый поиск по причине отказа
+      responses:
+        '200':
+          description: CSV-файл с транзакциями
+          content:
+            text/csv:
+              schema:
+                type: string
+        '400':
+          description: Невалидные параметры фильтра
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/simulator/terminal/run:
+    post:
+      tags: [Simulator]
+      summary: Запустить синхронную симуляцию POS-терминалов
+      description: |
+        Генерирует и отправляет указанное количество транзакций по заданному сценарию
+        через Gateway. Возвращает результат после завершения всех транзакций.
+        Доступные сценарии:
+        - `normal` - обычные покупки (100–5 000 ₽, дневное время, MCC 5411)
+        - `mixed` - смешанные (70% обычные, 15% крупные, 10% на грани лимита, 5% с заблокированными картами)
+        - `high_value` - только крупные суммы (100 000 – 500 000 ₽)
+        - `night_time` - ночные транзакции (01:00–05:00)
+        - `declines_test` - тест отклонений (разные причины decline)
+      operationId: runTerminalSimulator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerminalSimulatorRequest'
+      responses:
+        '200':
+          description: Симуляция завершена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorResponse'
+
+  /api/simulator/terminal/start:
+    post:
+      tags: [Simulator]
+      summary: Запустить асинхронную непрерывную симуляцию терминалов
+      description: |
+        Запускает фоновую генерацию транзакций.
+      operationId: startTerminalSimulator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TerminalSimulatorRequest'
+      responses:
+        '202':
+          description: Симуляция запущена в фоне
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runId, status]
+                properties:
+                  runId:
+                    type: string
+                    format: uuid
+                    description: Идентификатор запущенной симуляции
+                  status:
+                    type: string
+                    enum: [RUNNING]
+
+  /api/simulator/terminal/status:
+    get:
+      tags: [Simulator]
+      summary: Получить статус асинхронной симуляции терминалов
+      operationId: getTerminalSimulatorStatus
+      responses:
+        '200':
+          description: Текущий статус
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, processed, approved, declined]
+                properties:
+                  status:
+                    type: string
+                    enum: [RUNNING, FINISHED, STOPPED]
+                  processed:
+                    type: integer
+                  approved:
+                    type: integer
+                  declined:
+                    type: integer
+
+  /api/simulator/merchant/run:
+    post:
+      tags: [Simulator]
+      summary: Запустить симуляцию мерчантов и эквайреров
+      description: |
+        Генерирует транзакции с разнообразными MCC-кодами, комиссиями эквайрера
+        и типами бизнеса. В отличие от Terminal Simulator, добавляет реалистичности
+        за счёт разных категорий мерчантов (супермаркеты, рестораны, электроника,
+        e-commerce, телеком, отели и т.д.).
+        Доступные сценарии:
+        - `grocery` - продуктовые магазины (MCC 5411, 5499, суммы 100-3000 ₽)
+        - `electronics` - электроника (MCC 5732, 5045, суммы 5 000-100 000 ₽)
+        - `restaurant` - рестораны (MCC 5812, 5814, суммы 500-5000 ₽)
+        - `travel` - путешествия (MCC 3501, 4511, 4722, суммы 5 000-50 000 ₽)
+      operationId: runMerchantSimulator
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MerchantSimulatorRequest'
+      responses:
+        '200':
+          description: Симуляция завершена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulatorResponse'
+
+  /api/simulator/merchants:
+    get:
+      tags: [Simulator]
+      summary: Получить список всех зарегистрированных мерчантов
+      description:
+        Возвращает справочник мерчантов, используемых симулятором.
+      operationId: listMerchants
+      responses:
+        '200':
+          description: Список мерчантов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Merchant'
+
+  /api/dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Получить агрегированную статистику (KPI) для дашборда
+      description: |
+        Возвращает ключевые метрики процессинга для отображения в KPI-карточках дашборда:
+        - `totalTransactions` - общее количество обработанных транзакций
+        - `approvedCount` / `declinedCount` — количество одобренных/отклонённых
+        - `approvalRate` - доля одобренных
+        - `totalAmount` / `averageAmount` - общая и средняя сумма транзакций, в копейках
+        - `avgProcessingTimeMs` - среднее время обработки одной транзакции
+        - `transactionsPerMinute` - количество транзакций за последнюю минуту
+      operationId: getDashboardStats
+      responses:
+        '200':
+          description: Агрегированная статистика
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStats'
+
+  /api/dashboard/recent:
+    get:
+      tags: [Dashboard]
+      summary: Получить последние N транзакций для таблицы дашборда
+      description:
+        Возвращает список самых свежих транзакций.
+      operationId: getRecentTransactions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Количество транзакций
+      responses:
+        '200':
+          description: Список последних транзакций
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+
+  /api/dashboard/charts:
+    get:
+      tags: [Dashboard]
+      summary: Получить агрегацию транзакций по времени для графиков
+      description: Возвращает почасовую или подневную агрегацию для построения графиков на дашборде.
+      operationId: getDashboardCharts
+      parameters:
+        - name: granularity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [hour, day]
+            default: hour
+          description: Гранулярность агрегации
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Начало диапазона
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Конец диапазона
+      responses:
+        '200':
+          description: Временные ряды
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [timestamp, total, approved, declined, amount]
+                  properties:
+                    timestamp:
+                      type: string
+                      format: date-time
+                    total:
+                      type: integer
+                    approved:
+                      type: integer
+                    declined:
+                      type: integer
+                    amount:
+                      type: integer
+                      description: Сумма транзакций в копейках
+
+  /ws/transactions:
+    get:
+      tags: [Dashboard]
+      summary: WebSocket-поток транзакций в реальном времени
+      description: WebSocket-эндпоинт, который в реальном времени отправляет каждую новую транзакцию всем подключённым клиентам.
+      operationId: transactionsWebSocket
+      responses:
+        '101':
+          description: Соединение переключено на WebSocket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+
+  /api/internal/route:
+    post:
+      tags: [Internal]
+      summary: '[Switch] Маршрутизация транзакции: определение эмитента по BIN'
+      description: |
+        Внутренний вызов от Gateway к Switch. Switch извлекает BIN,
+        определяет `issuerId`, добавляет его в запрос и передаёт его
+        в Authorization Service (`POST /api/internal/authorize`). После получения ответа
+        синхронно пишет транзакцию в Logger (`POST /api/internal/log`).
+      operationId: internalRoute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '200':
+          description: Результат маршрутизации и авторизации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+        '503':
+          description: Authorization или Logger недоступны
+
+  /api/internal/authorize:
+    post:
+      tags: [Internal]
+      summary: '[Authorization] Проверка карты, лимитов и резервирование средств'
+      description: |
+        Внутренний вызов от Switch к Authorization Service. Выполняет полный цикл
+        проверки транзакции:
+        1. Получение карты из Card Management (`GET /api/cards/{pan}`)
+        2. Проверка статуса карты (ACTIVE/INACTIVE/BLOCKED/EXPIRED)
+        3. Проверка срока действия
+        4. Проверка дневного и месячного лимитов
+        5. Проверка доступного баланса
+        6. При успехе - резервирование средств (`POST /api/cards/{pan}/reserve`),
+           генерация RRN и authCode, возврат APPROVED с responseCode="00".
+      operationId: internalAuthorize
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizationRequest'
+      responses:
+        '200':
+          description: Решение по авторизации
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthorizationResponse'
+
+  /api/internal/log:
+    post:
+      tags: [Internal]
+      summary: '[Logger] Сохранение транзакции в журнал'
+      description: |
+        Внутренний вызов от Switch к Transaction Logger. Принимает полную запись
+        о транзакции и сохраняет её в PostgreSQL. После сохранения транзакция
+        рассылается подключённым WebSocket-клиентам.
+        Эндпоинт идемпотентен: повторный вызов с тем же `id` не создаёт дубликат.
+      operationId: internalLog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transaction'
+      responses:
+        '200':
+          description: Транзакция уже существовала (идемпотентный ответ)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogResponse'
+        '201':
+          description: Транзакция успешно сохранена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, timestamp]
+      properties:
+        error:
+          type: string
+          description: Машинно-читаемый код ошибки
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: Человеко-читаемое описание ошибки
+          example: "Field 'pan' must be exactly 16 digits"
+        timestamp:
+          type: string
+          format: date-time
+          description: Время возникновения ошибки
+        serviceName:
+          type: string
+          description: Имя недоступного сервиса
+        retryAfterMs:
+          type: integer
+          description: Через сколько миллисекунд повторить запрос
+
+    GatewayHealth:
+      type: object
+      required: [status, service, version, services]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, down]
+          description: Сводный статус Gateway
+        service:
+          type: string
+          example: "gateway"
+        version:
+          type: string
+          example: "1.0.0"
+        services:
+          type: object
+          description: Статус каждого downstream-сервиса
+          additionalProperties:
+            type: string
+            enum: [ok, unavailable, degraded]
+          example:
+            switch: "ok"
+            authorization: "ok"
+            cardManagement: "ok"
+            logger: "ok"
+
+    CardCreateRequest:
+      type: object
+      required: [bin, cardholderName]
+      properties:
+        bin:
+          type: string
+          pattern: '^\d{6}$'
+          description: Bank Identification Number - первые 6 цифр PAN
+          example: "400000"
+        cardholderName:
+          type: string
+          maxLength: 255
+          description: Имя и фамилия держателя карты латиницей (как на карте)
+          example: "IVAN IVANOV"
+        currencyCode:
+          type: string
+          pattern: '^\d{3}$'
+          default: "643"
+          description: Код валюты ISO 4217 (643 = RUB, 840 = USD, 978 = EUR)
+        dailyLimit:
+          type: integer
+          default: 15000000
+          description: Дневной лимит расходов в копейках (150 000 ₽ по умолчанию)
+        monthlyLimit:
+          type: integer
+          default: 300000000
+          description: Месячный лимит расходов в копейках (3 000 000 ₽ по умолчанию)
+        initialBalance:
+          type: integer
+          default: 100000000
+          description: Начальный баланс карты в копейках (1 000 000 ₽ по умолчанию)
+
+    Card:
+      type: object
+      required:
+        - id
+        - pan
+        - bin
+        - cardholderName
+        - expiryDate
+        - status
+        - currencyCode
+        - dailyLimit
+        - monthlyLimit
+        - availableBalance
+        - issuerId
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор карты в системе
+        pan:
+          type: string
+          pattern: '^\d{16}$'
+          description: Primary Account Number - полный номер карты (16 цифр, проходит проверку Луна)
+          example: "4000001234560001"
+        bin:
+          type: string
+          pattern: '^\d{6}$'
+          description: Bank Identification Number - первые 6 цифр PAN
+        cardholderName:
+          type: string
+          description: Имя держателя карты
+        expiryDate:
+          type: string
+          pattern: '^\d{4}$'
+          description: Срок действия в формате MMYY
+          example: "1229"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, BLOCKED, EXPIRED, DELETED]
+          description: |
+            Статус карты:
+            * `ACTIVE` - активна, готова к использованию
+            * `INACTIVE` - неактивна (например, сгенерирована как неактивная)
+            * `BLOCKED` - заблокирована
+            * `EXPIRED` - срок действия истёк
+            * `DELETED` - мягко удалена (не возвращается в API)
+        currencyCode:
+          type: string
+          pattern: '^\d{3}$'
+          description: Код валюты ISO 4217
+        dailyLimit:
+          type: integer
+          description: Дневной лимит расходов в копейках
+        monthlyLimit:
+          type: integer
+          description: Месячный лимит расходов в копейках
+        availableBalance:
+          type: integer
+          description: Доступный остаток на карте в копейках (уменьшается при резервировании)
+        issuerId:
+          type: string
+          description: ID банка-эмитента (определяется по BIN)
+          example: "ISS001"
+        createdAt:
+          type: string
+          format: date-time
+          description: Дата и время создания карты
+
+    CardUpdateRequest:
+      type: object
+      description: Частичное обновление карты - передаются только изменяемые поля
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, BLOCKED]
+          description: Новый статус карты
+        dailyLimit:
+          type: integer
+          description: Новый дневной лимит в копейках
+        monthlyLimit:
+          type: integer
+          description: Новый месячный лимит в копейках
+        availableBalance:
+          type: integer
+          description: Новый доступный остаток в копейках
+
+    GenerateCardsRequest:
+      type: object
+      required: [count, bins]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          description: Количество карт для генерации
+          example: 100
+        bins:
+          type: array
+          items:
+            type: string
+            pattern: '^\d{6}$'
+          minItems: 1
+          description: Список BIN-префиксов. Карты распределяются равномерно между ними.
+          example: ["400000", "400001", "400002"]
+
+    GenerateCardsResponse:
+      type: object
+      required: [generated, cards]
+      properties:
+        generated:
+          type: integer
+          description: Фактическое количество сгенерированных карт
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/Card'
+
+    ReserveRequest:
+      type: object
+      required: [amount, rrn]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          description: Сумма для резервирования в копейках
+          example: 150000
+        rrn:
+          type: string
+          maxLength: 12
+          description: Retrieval Reference Number - для идемпотентности операции
+          example: "012345678901"
+
+    RollbackRequest:
+      type: object
+      required: [ rrn, amount, pan ]
+      properties:
+        rrn:
+          type: string
+          minLength: 12
+          maxLength: 12
+          description: Retrieval Reference Number - для идемпотентности операции
+          example: "012345678901"
+        amount:
+          type: integer
+          minimum: 1
+          description: Сумма для возврата
+          example: 150000
+        pan:
+          type: string
+          minLength: 16
+          maxLength: 16
+          description: Primary Account Number - номер карты
+          example: "1234123412341234"
+
+
+    Merchant:
+      type: object
+      required: [id, name, mcc, category, acquirerId, acquiringFee, averageCheck]
+      properties:
+        id:
+          type: string
+          description: ID мерчанта
+        name:
+          type: string
+          description: Название торговой точки
+        mcc:
+          type: string
+          pattern: '^\d{4}$'
+          description: Merchant Category Code
+        category:
+          type: string
+          enum: [grocery, restaurant, electronics, ecommerce, telecom, entertainment, travel, other]
+        acquirerId:
+          type: string
+          description: ID банка-эквайера
+        acquiringFee:
+          type: number
+          format: double
+          description: Комиссия эквайера (доля, например 0.015 = 1.5%)
+        averageCheck:
+          type: integer
+          description: Средний чек в копейках
+
+    AuthorizationRequest:
+      type: object
+      required:
+        - mti
+        - stan
+        - pan
+        - processingCode
+        - amount
+        - currencyCode
+        - transmissionDateTime
+        - terminalId
+        - merchantId
+        - mcc
+        - acquirerId
+      properties:
+        mti:
+          type: string
+          pattern: '^\d{4}$'
+          description: |
+            Message Type Identifier - тип сообщения ISO 8583
+          example: "0100"
+        stan:
+          type: string
+          pattern: '^\d{6}$'
+          description: System Trace Audit Number - уникальный номер транзакции в терминале (000001..999999)
+          example: "000001"
+        pan:
+          type: string
+          pattern: '^\d{16}$'
+          description: Primary Account Number - номер карты (16 цифр)
+          example: "4000001234560001"
+        processingCode:
+          type: string
+          pattern: '^\d{6}$'
+          description: Код обработки (000000 = покупка, 000001 = снятие наличных)
+          example: "000000"
+        amount:
+          type: integer
+          minimum: 1
+          description: Сумма транзакции в минорных единицах (копейках). 150000 = 1 500.00 ₽
+          example: 150000
+        currencyCode:
+          type: string
+          pattern: '^\d{3}$'
+          description: Код валюты ISO 4217 (643 = RUB)
+          example: "643"
+        transmissionDateTime:
+          type: string
+          format: date-time
+          description: Дата и время отправки транзакции терминалом (ISO 8601, UTC)
+        terminalId:
+          type: string
+          maxLength: 8
+          description: Идентификатор POS-терминала
+          example: "TERM001"
+        terminalType:
+          type: string
+          enum: [POS, ATM, ECOM]
+          description: Тип терминала (опционально)
+        merchantId:
+          type: string
+          maxLength: 15
+          description: Идентификатор мерчанта (торговой точки)
+          example: "MERCH12345678901"
+        mcc:
+          type: string
+          pattern: '^\d{4}$'
+          description: Merchant Category Code - код категории бизнеса
+          example: "5411"
+        acquirerId:
+          type: string
+          description: ID банка-эквайера
+          example: "ACQ001"
+        issuerId:
+          type: string
+          description: |
+            ID банка-эмитента. Не заполняется клиентом - определяется Switch-ом
+            по BIN карты на этапе маршрутизации.
+          example: "ISS001"
+
+    AuthorizationResponse:
+      type: object
+      required:
+        - mti
+        - stan
+        - rrn
+        - authCode
+        - responseCode
+        - status
+      properties:
+        mti:
+          type: string
+          example: "0110"
+          description: Message Type Identifier ответа (0110 = ответ на авторизацию 0100)
+        stan:
+          type: string
+          description: STAN из исходного запроса (для сопоставления)
+        rrn:
+          type: string
+          maxLength: 12
+          description: |
+            Retrieval Reference Number - уникальный идентификатор транзакции в системе.
+            Формат: `{YDDD}{HH}{mm}{ss}{seq}`. Уникален в рамках всей системы.
+          example: "012345678901"
+        authCode:
+          type: string
+          maxLength: 6
+          description: Код авторизации (6 символов A-Z0-9). Генерируется только при APPROVED.
+          example: "ABC123"
+        responseCode:
+          type: string
+          pattern: '^\d{2}$'
+          description: |
+            Код ответа ISO 8583:
+            * `00` - Approved (одобрено)
+            * `05` - Do Not Honor (отказано, общая причина)
+            * `14` - Invalid Card Number (карта не найдена / неверный BIN)
+            * `51` - Insufficient Funds (недостаточно средств)
+            * `54` - Expired Card (карта просрочена)
+            * `61` - Exceeds Amount Limit (превышен дневной/месячный лимит)
+            * `96` - System Error (системная ошибка, например, откат из-за недоступности Logger)
+          example: "00"
+        status:
+          type: string
+          enum: [APPROVED, DECLINED]
+          description: Итоговый статус транзакции
+        declineReason:
+          type: string
+          nullable: true
+          description: |
+            Человеко-читаемая причина отклонения. Заполняется только при status=DECLINED.
+            Примеры: "Insufficient funds", "CARD_BLOCKED", "ISSUER_TIMEOUT".
+          example: "Insufficient funds"
+        processingTimeMs:
+          type: integer
+          description: Время обработки в Authorization Service, мс.
+          example: 42
+
+    SimulatorResponse:
+      type: object
+      required: [totalSubmitted, approved, declined, elapsedMs]
+      properties:
+        totalSubmitted:
+          type: integer
+          description: Общее количество отправленных транзакций
+        approved:
+          type: integer
+          description: Количество одобренных транзакций
+        declined:
+          type: integer
+          description: Количество отклонённых транзакций
+        elapsedMs:
+          type: integer
+          description: Общее время выполнения симуляции в миллисекундах
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthorizationResponse'
+          description: Детализация ответов по каждой транзакции
+
+    TerminalSimulatorRequest:
+      type: object
+      required: [count, scenario]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          description: Количество транзакций для генерации
+          example: 50
+        scenario:
+          type: string
+          enum: [normal, mixed, high_value, night_time, declines_test]
+          description: Сценарий симуляции (определяет распределение сумм, MCC, времени)
+
+    MerchantSimulatorRequest:
+      type: object
+      required: [count, scenario]
+      properties:
+        count:
+          type: integer
+          minimum: 1
+          description: Количество транзакций
+          example: 50
+        scenario:
+          type: string
+          enum: [grocery, electronics, restaurant, travel]
+          description: Сценарий симуляции
+        mccCodes:
+          type: array
+          items:
+            type: string
+            pattern: '^\d{4}$'
+          description: |
+            Явный список MCC-кодов. Если указан — используется вместо MCC по умолчанию
+            для выбранного сценария.
+
+    Transaction:
+      type: object
+      description: |
+        Полная запись о транзакции в журнале. Объединяет AuthorizationRequest +
+        AuthorizationResponse + системные поля (id, acquiringFee, createdAt).
+      allOf:
+        - $ref: '#/components/schemas/AuthorizationRequest'
+        - $ref: '#/components/schemas/AuthorizationResponse'
+        - type: object
+          required: [id, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Уникальный идентификатор записи транзакции в БД Logger
+            acquiringFee:
+              type: integer
+              nullable: true
+              description: Комиссия эквайера в копейках (рассчитывается Merchant Simulator)
+            createdAt:
+              type: string
+              format: date-time
+              description: Дата и время записи транзакции в Logger
+
+    TransactionSearchResponse:
+      type: object
+      required: [total, transactions]
+      properties:
+        total:
+          type: integer
+          format: int64
+          description: Общее число транзакций, удовлетворяющих фильтру (без учёта пагинации)
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+
+    LogResponse:
+      type: object
+      required: [id, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID записи транзакции
+        status:
+          type: string
+          enum: [stored, already_exists]
+          description: Статус операции сохранения
+
+    DashboardStats:
+      type: object
+      required:
+        - totalTransactions
+        - approvedCount
+        - declinedCount
+        - approvalRate
+        - totalAmount
+        - averageAmount
+        - avgProcessingTimeMs
+        - transactionsPerMinute
+      properties:
+        totalTransactions:
+          type: integer
+          description: Общее количество обработанных транзакций
+        approvedCount:
+          type: integer
+          description: Количество одобренных транзакций
+        declinedCount:
+          type: integer
+          description: Количество отклонённых транзакций
+        approvalRate:
+          type: number
+          format: double
+          description: Доля одобренных транзакций (0..1)
+          example: 0.88
+        totalAmount:
+          type: integer
+          description: Общая сумма всех транзакций в копейках
+        averageAmount:
+          type: integer
+          description: Средняя сумма транзакции в копейках
+        avgProcessingTimeMs:
+          type: number
+          format: double
+          description: Среднее время обработки транзакции, мс
+          example: 38.5
+        transactionsPerMinute:
+          type: integer
+          format: int64
+          description: Количество транзакций за последнюю минуту (TPS × 60)
+          example: 12

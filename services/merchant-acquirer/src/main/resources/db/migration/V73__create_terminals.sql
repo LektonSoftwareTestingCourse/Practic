@@ -1,0 +1,73 @@
+create table Terminals (
+    id          VARCHAR(16) PRIMARY KEY,
+    type        VARCHAR(10) NOT NULL,
+    merchant_id VARCHAR(15) NOT NULL,
+    CONSTRAINT fk_terminal_merchant FOREIGN KEY (merchant_id) REFERENCES Merchants(id)
+);
+
+create index idx_terminals_merchant_id on Terminals (merchant_id);
+
+insert into Terminals (id, type, merchant_id) values
+    -- grocery (POS)
+    ('TERM0001', 'POS',  'MERCH0000000005'),
+    ('TERM0002', 'POS',  'MERCH0000000005'),
+    ('TERM0003', 'POS',  'MERCH0000000006'),
+    ('TERM0004', 'POS',  'MERCH0000000006'),
+    ('TERM0005', 'POS',  'MERCH0000000007'),
+    ('TERM0006', 'POS',  'MERCH0000000007'),
+    ('TERM0007', 'POS',  'MERCH0000000026'),
+    ('TERM0008', 'POS',  'MERCH0000000026'),
+    ('TERM0009', 'POS',  'MERCH0000000027'),
+    ('TERM0010', 'POS',  'MERCH0000000027'),
+    ('TERM0011', 'POS',  'MERCH0000000028'),
+    ('TERM0012', 'POS',  'MERCH0000000028'),
+
+    -- restaurant (POS)
+    ('TERM0013', 'POS',  'MERCH0000000008'),
+    ('TERM0014', 'POS',  'MERCH0000000008'),
+    ('TERM0015', 'POS',  'MERCH0000000009'),
+    ('TERM0016', 'POS',  'MERCH0000000009'),
+    ('TERM0017', 'POS',  'MERCH0000000010'),
+    ('TERM0018', 'POS',  'MERCH0000000010'),
+
+    -- fastfood (POS)
+    ('TERM0019', 'POS',  'MERCH0000000011'),
+    ('TERM0020', 'POS',  'MERCH0000000011'),
+    ('TERM0021', 'POS',  'MERCH0000000012'),
+    ('TERM0022', 'POS',  'MERCH0000000012'),
+    ('TERM0023', 'POS',  'MERCH0000000013'),
+    ('TERM0024', 'POS',  'MERCH0000000013'),
+
+    -- electronics (POS)
+    ('TERM0025', 'POS',  'MERCH0000000029'),
+    ('TERM0026', 'POS',  'MERCH0000000029'),
+    ('TERM0027', 'POS',  'MERCH0000000014'),
+    ('TERM0028', 'POS',  'MERCH0000000014'),
+    ('TERM0029', 'POS',  'MERCH0000000015'),
+    ('TERM0030', 'POS',  'MERCH0000000015'),
+    ('TERM0031', 'POS',  'MERCH0000000016'),
+    ('TERM0032', 'POS',  'MERCH0000000016'),
+
+    -- ecommerce (ECOM)
+    ('TERM0033', 'ECOM', 'MERCH0000000017'),
+    ('TERM0034', 'ECOM', 'MERCH0000000018'),
+
+    -- telecom (ECOM)
+    ('TERM0035', 'ECOM', 'MERCH0000000019'),
+    ('TERM0036', 'ECOM', 'MERCH0000000020'),
+    ('TERM0037', 'ECOM', 'MERCH0000000021'),
+
+    -- entertainment (ECOM)
+    ('TERM0038', 'ECOM', 'MERCH0000000022'),
+    ('TERM0039', 'ECOM', 'MERCH0000000023'),
+
+    -- hotel (POS)
+    ('TERM0040', 'POS',  'MERCH0000000024'),
+    ('TERM0041', 'POS',  'MERCH0000000024'),
+    ('TERM0042', 'POS',  'MERCH0000000025'),
+    ('TERM0043', 'POS',  'MERCH0000000025'),
+
+    -- travel (ECOM)
+    ('TERM0044', 'ECOM', 'MERCH0000000035'),
+    ('TERM0045', 'ECOM', 'MERCH0000000036'),
+    ('TERM0046', 'ECOM', 'MERCH0000000037');

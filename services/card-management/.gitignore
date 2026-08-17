@@ -1,0 +1,5 @@
+# Build output (covered by parent, explicit for clarity)
+target/
+
+# Environment (covered by parent, explicit for clarity)
+.env

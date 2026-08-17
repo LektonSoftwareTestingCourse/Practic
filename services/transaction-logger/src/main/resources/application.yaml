@@ -1,0 +1,61 @@
+server:
+  port: ${SERVER_PORT:${PORT:8080}}
+
+websocket:
+  allowed-origins: ${DASHBOARD_ORIGIN:http://localhost:3000}
+  ping-interval-ms: 30000
+
+spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:smp}
+    password: ${SPRING_RABBITMQ_PASSWORD:smp}
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:smp_db}
+    username: ${POSTGRES_USER:smp_user}
+    password: ${POSTGRES_PASSWORD:smp_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
+    table: transaction_logger_schema_history
+
+logging:
+  level:
+    com.processing: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{requestId}] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: transaction-logger
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      percentiles:
+        "[http.server.requests]":
+          - 0.5
+          - 0.95
+          - 0.99
+
+springdoc:
+  swagger-ui:
+    path: /docs

@@ -1,0 +1,28 @@
+# Binary
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+cmd/cmd
+
+# IDE
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore

@@ -1,0 +1,71 @@
+server:
+  port: ${PORT:8082}
+
+spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:smp}
+    password: ${SPRING_RABBITMQ_PASSWORD:smp}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
+# AUTH_URL, LOGGER_URL — имена переменных из docker-compose (сервис switch);
+switch:
+  version: 1.0.0
+  authorization-url: ${AUTH_URL:http://localhost:8083}
+  logger-url: ${LOGGER_URL:http://localhost:8088}
+  merchant-acquirer-url: ${MERCHANT_URL:http://localhost:8086}
+  http:
+    connect-timeout-ms: 3000
+    auth-read-timeout-ms: 5000
+    logger-read-timeout-ms: 2000
+  retry:
+    max-attempts: 3
+    backoff-ms:
+      - 1000
+      - 2000
+      - 4000
+  circuit-breaker:
+    authorization:
+      failure-rate-threshold: 50
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+      wait-duration-in-open-state-ms: 30000
+  bin-routing:
+    "400000": ISS001
+    "400001": ISS002
+    "400002": ISS003
+    "400003": ISS004
+    "400004": ISS005
+
+logging:
+  level:
+    com.processing: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: switch
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      percentiles:
+        "[http.server.requests]":
+          - 0.5
+          - 0.95
+          - 0.99

@@ -1,0 +1,196 @@
+server:
+  port: ${SERVER_PORT:${GATEWAY_PORT:8080}}
+  shutdown: graceful
+
+#---
+# Logging
+logging:
+  level:
+    com.processing.gateway: INFO
+    org.springframework.cloud.gateway: ERROR
+    org.springframework.cloud.gateway.filter.factory.rewrite.ModifyResponseBodyGatewayFilterFactory: TRACE
+    org.springframework.http.client: ERROR
+    org.springframework.web.client: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} %X{requestId} - %msg%n"
+
+#---
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  metrics:
+    tags:
+      application: gateway
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      percentiles:
+        "[http.server.requests]":
+          - 0.5
+          - 0.95
+          - 0.99
+      slo:
+        "[http.server.requests]":
+          - 50ms
+          - 100ms
+          - 250ms
+          - 500ms
+          - 1s
+          - 2s
+
+spring:
+  main:
+    web-application-type: reactive
+  lifecycle:
+    timeout-per-shutdown-phase: ${GATEWAY_SHUTDOWN_DRAIN_PERIOD:30s}
+  cloud:
+    gateway:
+      routes:
+      - id: switch
+        uri: ${SWITCH_URL:http://localhost:8082}
+        metadata:
+          serviceName: switch
+        predicates:
+          - Path=/api/transactions
+          - Method=POST
+        filters:
+          - RewritePath=/api/transactions, /api/internal/route
+      - id: logger
+        uri: ${LOGGER_URL:http://localhost:8088}
+        metadata:
+          serviceName: logger
+        predicates:
+          - Path=/api/transactions/**
+      - id: dashboard
+        uri: ${LOGGER_URL:http://localhost:8088}
+        metadata:
+          serviceName: logger
+        predicates:
+          - Path=/api/dashboard/**
+      - id: terminal
+        uri: ${TERMINAL_SIM_URL:http://localhost:8085}
+        metadata:
+          serviceName: terminalSimulator
+        predicates:
+          - Path=/api/simulator/terminal/**
+      - id: merchant
+        uri: ${MERCHANT_SIM_URL:http://localhost:8086}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchant/**
+      - id: cards
+        uri: ${CARD_MGMT_URL:http://localhost:8081}
+        metadata:
+          serviceName: cardManagement
+        predicates:
+          - Path=/api/cards/**
+        filters:
+          - ResponseCaching
+
+      # OpenApi endpoints
+      - id: switch-docs
+        uri: ${SWITCH_URL:http://localhost:8082}
+        predicates:
+          - Path=/switch-docs
+          - Method=GET
+        filters:
+          - RewritePath=/switch-docs, /v3/api-docs
+          - OpenApi
+      - id: logger-docs
+        uri: ${LOGGER_URL:http://localhost:8088}
+        predicates:
+          - Path=/logger-docs
+          - Method=GET
+        filters:
+          - RewritePath=/logger-docs, /v3/api-docs
+          - OpenApi
+      - id: terminal-docs
+        uri: ${TERMINAL_SIM_URL:http://localhost:8085}
+        predicates:
+          - Path=/terminal-docs
+          - Method=GET
+        filters:
+          - RewritePath=/terminal-docs, /v3/api-docs
+          - OpenApi
+      - id: merchant-docs
+        uri: ${MERCHANT_SIM_URL:http://localhost:8086}
+        predicates:
+          - Path=/merchant-docs
+          - Method=GET
+        filters:
+          - RewritePath=/merchant-docs, /v3/api-docs
+          - OpenApi
+      - id: cards-docs
+        uri: ${CARD_MGMT_URL:http://localhost:8081}
+        predicates:
+          - Path=/cards-docs
+          - Method=GET
+        filters:
+          - RewritePath=/cards-docs, /v3/api-docs
+          - OpenApi
+
+# Gateway
+gateway:
+  version: 1.0.0
+  downstream-services:
+    urls:
+      switch-url: ${SWITCH_URL:http://localhost:8082}
+      logger-url: ${LOGGER_URL:http://localhost:8088}
+      auth-url: ${AUTH_URL:http://localhost:8083}
+      cards-url: ${CARD_MGMT_URL:http://localhost:8081}
+  rate-limit:
+    transactions:
+      capacity: ${TRANSACTIONS_RATE_LIMIT_CAPACITY:${gateway.rate-limit.transactions-per-second:${TRANSACTIONS_RATE_LIMIT:100}}}
+      refill-per-second: ${TRANSACTIONS_RATE_LIMIT_REFILL_PER_SECOND:${gateway.rate-limit.transactions-per-second:${TRANSACTIONS_RATE_LIMIT:100}}}
+      bucket-expire-after-access: ${TRANSACTIONS_RATE_LIMIT_BUCKET_TTL:10m}
+      max-buckets: ${TRANSACTIONS_RATE_LIMIT_MAX_BUCKETS:10000}
+  circuit-breaker:
+    failure-threshold: ${CIRCUIT_BREAKER_FAILURE_THRESHOLD:3}
+    open-duration: ${CIRCUIT_BREAKER_OPEN_DURATION:10s}
+  health:
+    connection-timeout: 5
+    request-timeout: 3
+    url: /health
+  shutdown:
+    drain-period: ${GATEWAY_SHUTDOWN_DRAIN_PERIOD:30s}
+  logging:
+    bodies: false
+    pretty: false
+    excluded-routes:
+      - /actuator/prometheus
+
+#---
+# Swagger
+springdoc:
+  swagger-ui:
+    path: /docs
+    urls:
+      - name: Gateway
+        url: /v3/api-docs
+      - name: Switch
+        url: /switch-docs
+      - name: Transaction Logger
+        url: /logger-docs
+      - name: Terminal Simulator
+        url: /terminal-docs
+      - name: Merchant Acquirer
+        url: /merchant-docs
+      - name: Card Management
+        url: /cards-docs

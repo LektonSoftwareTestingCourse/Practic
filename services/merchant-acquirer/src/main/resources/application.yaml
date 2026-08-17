@@ -1,0 +1,86 @@
+spring.application.name: merchant-acquirer
+server.port: ${PORT:8080}
+
+# PostgreSQL
+spring.datasource.url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:smp_db}
+spring.datasource.username: ${POSTGRES_USER:smp_user}
+spring.datasource.password: ${POSTGRES_PASSWORD:smp_password}
+spring.jpa.hibernate.ddl-auto: validate
+
+spring.flyway.clean-disabled: true
+spring.flyway.baseline-on-migrate: true
+spring.flyway.out-of-order: true
+spring.flyway.ignore-migration-patterns: "*:missing"
+
+# Logging
+logging.level.com.processing: INFO
+logging.pattern.console: '%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n'
+spring.jpa.show-sql: false
+spring.jpa.properties.hibernate.format_sql: false
+spring.jpa.properties.hibernate.jdbc.batch_size: 100
+spring.jpa.properties.hibernate.order_inserts: true
+spring.jpa.properties.hibernate.generate_statistics: false
+logging.level.org.hibernate.engine.jdbc.batch.internal.BatchingBatch: WARN
+
+# Настройки параллельности
+spring.threads.virtual.enabled: true
+spring.datasource.hikari.maximum-pool-size: 20
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      access:
+  metrics:
+    tags:
+      application: merchant-acquirer
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      percentiles:
+        "[http.server.requests]":
+          - 0.5
+          - 0.95
+          - 0.99
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+gateway.url: ${GATEWAY_URL:http://gateway:8080}
+
+# Scenarios
+simulation.scenarios.grocery:
+  mcc: ["5411", "5499"]
+  count-lower: 10000
+  count-upper: 300000
+  time-lower: "08:00"
+  time-upper: "22:00"
+  avg-approved: 95
+simulation.scenarios.electronics:
+  mcc: ["5732", "5045"]
+  count-lower: 500000
+  count-upper: 10000000
+  time-lower: "10:00"
+  time-upper: "22:00"
+  avg-approved: 90
+simulation.scenarios.restaurant:
+  mcc: ["5812", "5814"]
+  count-lower: 50000
+  count-upper: 500000
+  time-lower: "11:00"
+  time-upper: "23:59"
+  avg-approved: 90
+simulation.scenarios.travel:
+  mcc: ["3501", "4511", "4722"]
+  count-lower: 500000
+  count-upper: 5000000
+  time-lower: "00:00"
+  time-upper: "23:59"
+  avg-approved: 90

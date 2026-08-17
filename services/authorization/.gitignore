@@ -1,0 +1,8 @@
+# Build output (covered by parent, explicit for clarity)
+target/
+
+# Maven wrapper (covered by parent, explicit for clarity)
+.mvn
+
+# Environment (covered by parent, explicit for clarity)
+.env

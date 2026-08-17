@@ -1,0 +1,429 @@
+name: smp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: smp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: smp-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-smp}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-smp}
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  gateway:
+    image: ghcr.io/${GHCR_USER:-local}/smp-gateway:latest
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    container_name: smp-gateway
+    restart: unless-stopped
+    stop_grace_period: ${GATEWAY_STOP_GRACE_PERIOD}
+    ports:
+      - "${GATEWAY_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - GATEWAY_SHUTDOWN_DRAIN_PERIOD=${GATEWAY_SHUTDOWN_DRAIN_PERIOD:-30s}
+      - TRANSACTIONS_RATE_LIMIT_CAPACITY=${TRANSACTIONS_RATE_LIMIT_CAPACITY:-100}
+      - TRANSACTIONS_RATE_LIMIT_REFILL_PER_SECOND=${TRANSACTIONS_RATE_LIMIT_REFILL_PER_SECOND:-100}
+      - TRANSACTIONS_RATE_LIMIT_BUCKET_TTL=${TRANSACTIONS_RATE_LIMIT_BUCKET_TTL:-10m}
+      - TRANSACTIONS_RATE_LIMIT_MAX_BUCKETS=${TRANSACTIONS_RATE_LIMIT_MAX_BUCKETS:-10000}
+      - SWITCH_URL=http://switch:8080
+      - AUTH_URL=http://authorization:8080
+      - CARD_MGMT_URL=http://card-management:8080
+      - LOGGER_URL=http://transaction-logger:8080
+      - TERMINAL_SIM_URL=http://terminal-simulator:8080
+      - MERCHANT_SIM_URL=http://merchant-acquirer:8080
+    depends_on:
+      - switch
+      - card-management
+      - transaction-logger
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  card-management:
+    image: ghcr.io/${GHCR_USER:-local}/smp-card-management:latest
+    build:
+      context: .
+      dockerfile: services/card-management/Dockerfile
+    container_name: smp-card-management
+    restart: unless-stopped
+    ports:
+      - "${CARD_MGMT_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - POSTGRES_HOST=${DB_HOST}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-smp}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-smp}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  switch:
+    image: ghcr.io/${GHCR_USER:-local}/smp-switch:latest
+    build:
+      context: .
+      dockerfile: services/switch/Dockerfile
+    container_name: smp-switch
+    restart: unless-stopped
+    ports:
+      - "${SWITCH_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - AUTH_URL=http://authorization:8080
+      - LOGGER_URL=http://transaction-logger:8080
+      - MERCHANT_URL=http://merchant-acquirer:8080
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-smp}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-smp}
+    depends_on:
+      authorization:
+        condition: service_started
+      transaction-logger:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smp-network
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  authorization:
+    image: ghcr.io/${GHCR_USER:-local}/smp-authorization:latest
+    build:
+      context: .
+      dockerfile: services/authorization/Dockerfile
+    container_name: smp-authorization
+    restart: unless-stopped
+    ports:
+      - "${AUTH_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - POSTGRES_HOST=${DB_HOST}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - BIN_LOOKUP_URL=http://bin-lookup:8080
+      - CARD_MGMT_URL=http://card-management:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      card-management:
+        condition: service_started
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  bin-lookup:
+    build:
+      context: .
+      dockerfile: services/bin-lookup/Dockerfile
+    container_name: smp-bin-lookup
+    restart: unless-stopped
+    ports:
+      - "${BIN_LOOKUP_PORT:-8096}:8080"
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+    container_name: smp-notification
+    restart: unless-stopped
+    ports:
+      - "${NOTIFICATION_PORT:-8097}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-smp}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-smp}
+      - POSTGRES_HOST=${DB_HOST}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - SPRING_FLYWAY_TABLE=flyway_schema_history_notification
+      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
+      - SPRING_FLYWAY_BASELINE_VERSION=0
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  terminal-simulator:
+    image: ghcr.io/${GHCR_USER:-local}/smp-terminal-simulator:latest
+    build:
+      context: .
+      dockerfile: services/terminal-simulator/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8085-8095:8080"
+    environment:
+      - SERVER_PORT=8080
+      - GATEWAY_URL=http://gateway:8080
+      - CARD_MGMT_URL=http://card-management:8080
+    depends_on:
+      - gateway
+      - card-management
+    networks:
+      - smp-network
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  autoscaler:
+    image: docker:27-cli
+    environment:
+      - GHCR_USER
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts/autoscaler.sh:/app/autoscaler.sh
+      - ./docker-compose.yaml:/app/docker-compose.yaml:ro
+      - ./.env:/app/.env:ro
+    working_dir: /app
+    command: sh -c "apk add --no-cache curl bash jq && chmod +x autoscaler.sh && ./autoscaler.sh"
+    depends_on:
+      - prometheus
+      - terminal-simulator
+    networks:
+      - smp-network
+
+  merchant-acquirer:
+    image: ghcr.io/${GHCR_USER:-local}/smp-merchant-acquirer:latest
+    build:
+      context: .
+      dockerfile: services/merchant-acquirer/Dockerfile
+    container_name: smp-merchant-acquirer
+    restart: unless-stopped
+    ports:
+      - "${MERCHANT_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - GATEWAY_URL=http://gateway:8080
+      - POSTGRES_HOST=${DB_HOST}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      # Схему public наполняют card-management/logger (JPA) — Flyway требует
+      # baseline; версия 0, чтобы собственные V1/V2 миграции применились.
+      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
+      - SPRING_FLYWAY_BASELINE_VERSION=0
+    depends_on:
+      - gateway
+    networks:
+      - smp-network
+    healthcheck:
+      test: [ "CMD", "wget", "-qO-", "http://localhost:8080/health" ]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  transaction-logger:
+    image: ghcr.io/${GHCR_USER:-local}/smp-transaction-logger:latest
+    build:
+      context: .
+      dockerfile: services/transaction-logger/Dockerfile
+    container_name: smp-transaction-logger
+    restart: unless-stopped
+    ports:
+      - "${LOGGER_PORT}:8080"
+    environment:
+      - SERVER_PORT=8080
+      - SPRING_AMQP_DESERIALIZATION_TRUST_ALL=true
+      - POSTGRES_HOST=${DB_HOST}
+      - POSTGRES_PORT=${DB_PORT}
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+      - DASHBOARD_ORIGIN=${DASHBOARD_ORIGIN:-http://localhost:3000}
+      - SPRING_RABBITMQ_HOST=rabbitmq
+      - SPRING_RABBITMQ_PORT=5672
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USER:-smp}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD:-smp}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  dashboard:
+    image: ghcr.io/${GHCR_USER:-local}/smp-dashboard:latest
+    build:
+      context: ./services/dashboard
+      dockerfile: Dockerfile
+    container_name: smp-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT}:3000"
+    environment:
+      - PORT=3000
+      - GATEWAY_URL=http://gateway:8080
+      - LOGGER_URL=http://transaction-logger:8080
+      - LOGGER_WS_URL=ws://transaction-logger:8080
+    depends_on:
+      - gateway
+      - transaction-logger
+    networks:
+      - smp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: smp-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - gateway
+    networks:
+      - smp-network
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    user: "472:472"
+    container_name: smp-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - smp-network
+
+  loki:
+    image: grafana/loki:3.3.2
+    container_name: smp-loki
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./infra/loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    networks:
+      - smp-network
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    container_name: smp-promtail
+    restart: unless-stopped
+    volumes:
+      - ./infra/promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - smp-network
+    depends_on:
+      - loki
+
+networks:
+  smp-network:
+    driver: bridge
+
+volumes:
+  pg_data:
+  grafana_data:
+  loki_data:

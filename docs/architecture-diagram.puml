@@ -1,0 +1,103 @@
+@startuml
+!theme vibrant
+
+title Архитектура СМП (Система Медленных Платежей)\nМикросервисная архитектура с RabbitMQ, PostgreSQL
+
+skinparam componentStyle rectangle
+skinparam nodesep 80
+skinparam ranksep 80
+skinparam ArrowColor #555555
+skinparam ArrowThickness 2
+skinparam defaultFontSize 12
+skinparam packageBorderColor #444444
+skinparam packageBackgroundColor #F8F8F8
+
+' --- Эмуляторы внешних систем ---
+package "Эмуляторы внешних систем" as Simulators #E3F2FD {
+    [Terminal Simulator\nPOS-терминал\n:8085] as TERM #BBDEFB
+    [Merchant + Acquirer\nSimulator\n:8086] as MERCH #BBDEFB
+}
+
+' --- API Gateway ---
+package "API Gateway" as GatewayLayer #FFF3E0 {
+    [Gateway Service\nREST API шлюз\n:8080] as GW #FFE0B2
+}
+
+' --- Core Processing ---
+package "Core Processing" as Core #E8F5E9 {
+    [Switch / Router\nМаршрутизация транзакций\n:8082] as SW #C8E6C9
+    [Authorization Service\nПроверка и авторизация\n:8083] as AUTH #C8E6C9
+    [Card Management\nУправление картами\n:8081] as CMS #C8E6C9
+}
+
+' --- External API ---
+package "External API" as External #FCE4EC {
+    [Bin Lookup Service\nВнешний API BIN-ов\n:8096] as BIN #F8BBD0
+}
+
+' --- Notifications ---
+package "Notifications" as Notif #EDE7F6 {
+    [Notification Service\nУведомления о картах\n:8097] as NS #D1C4E9
+}
+
+' --- Logging ---
+package "Logging" as LoggingLayer #E0F7FA {
+    [Transaction Logger\nЛогирование + WebSocket\n:8088] as LOG #B2EBF2
+}
+
+' --- Frontend ---
+package "Frontend" as Frontend #FFF9C4 {
+    [Web Dashboard\nReact SPA\n:3000] as WEB #FFF176
+}
+
+' --- Infrastructure ---
+package "Infrastructure" as Infra #ECEFF1 {
+    database "PostgreSQL\n:5432" as DB #CFD8DC
+    queue "RabbitMQ\nMessage Broker\n:5672 / :15672" as RMQ #CFD8DC
+}
+
+' === Соединения ===
+
+' Эмуляторы → Gateway
+TERM -down-> GW : HTTP POST\n/api/transactions
+MERCH -down-> GW : HTTP POST\n/api/transactions
+
+' Gateway → Switch
+GW -down-> SW
+
+' Switch → Authorization
+SW -right-> AUTH
+
+' Authorization → Bin Lookup (внешний API)
+AUTH -down-> BIN : GET /api/bin/{bin}
+
+' Switch → RabbitMQ → Logger (ВАРИАНТ A)
+SW -down-> RMQ : Publish\ntransaction
+RMQ -right-> LOG : Consume\ntransaction
+
+' Authorization → Card Management
+AUTH -right-> CMS
+
+' Card Management → DB
+CMS -down-> DB
+
+' Card Management → RabbitMQ → Notification Service (ВАРИАНТ C)
+CMS -right-> RMQ : Publish\ncard events
+RMQ -up-> NS : Consume\ncard events
+
+' Notification → DB
+NS -left-> DB
+
+' Logger → DB
+LOG -down-> DB
+
+' Authorization → DB
+AUTH -down-> DB
+
+' Dashboard → Gateway (REST)
+WEB -up-> GW : REST
+
+' Dashboard → Logger (WebSocket)
+WEB .up.> LOG : WebSocket
+
+@enduml

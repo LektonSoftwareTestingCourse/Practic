@@ -1,0 +1,108 @@
+# =========================================================================
+# .pre-commit-config.yaml — Pre-commit хуки для СМП
+# =========================================================================
+# Установка:
+#   pip install pre-commit          # или brew install pre-commit
+#   pre-commit install              # устанавливает git hooks
+#
+# Запуск вручную на всех файлах:
+#   pre-commit run --all-files
+#
+# Пропустить проверку (если очень надо):
+#   git commit --no-verify
+# =========================================================================
+
+repos:
+# -------------------------------------------------------------------
+# Общие проверки (все языки)
+# -------------------------------------------------------------------
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: trailing-whitespace
+    name: "Trim trailing whitespace"
+  - id: end-of-file-fixer
+    name: "Fix end of files (newline)"
+    exclude: \.csv$
+  - id: check-yaml
+    name: "Check YAML syntax"
+    args: [ --allow-multiple ]
+    exclude: ^starters/java/target/
+  - id: check-json
+    name: "Check JSON syntax"
+  - id: check-merge-conflict
+    name: "Check for merge conflicts"
+  - id: detect-private-key
+    name: "Detect private keys"
+  - id: mixed-line-ending
+    name: "Normalize line endings"
+    args: [ --fix=auto ]
+
+# -------------------------------------------------------------------
+# Java (отключено - Maven не установлен)
+# -------------------------------------------------------------------
+# - repo: local
+#   hooks:
+#   - id: checkstyle-java
+#     name: "Java: Checkstyle"
+#     entry: powershell -Command "if (Test-Path 'starters/java/pom.xml') { cd starters/java; mvn checkstyle:check }"
+#     language: system
+#     pass_filenames: false
+#     files: \.java$
+#     types: [ file ]
+
+# -------------------------------------------------------------------
+# Go (отключено - Go не установлен)
+# -------------------------------------------------------------------
+# - repo: local
+#   hooks:
+#   - id: go-vet
+#     name: "Go: vet"
+#     entry: go vet ./...
+#     language: system
+#     pass_filenames: false
+#     files: \.go$
+#     types: [ file ]
+#
+#   - id: go-fmt
+#     name: "Go: fmt"
+#     entry: gofmt -l -w
+#     language: system
+#     files: \.go$
+#     types: [ file ]
+
+# -------------------------------------------------------------------
+# Python (отключено - flake8 не установлен)
+# -------------------------------------------------------------------
+# - repo: local
+#   hooks:
+#   - id: flake8
+#     name: "Python: flake8"
+#     entry: flake8 --max-line-length=120 --extend-ignore=E203,W503
+#     language: system
+#     files: \.py$
+#     types: [ file ]
+
+# -------------------------------------------------------------------
+# TypeScript / JavaScript (отключено - ESLint требует TypeScript плагины)
+# -------------------------------------------------------------------
+# - repo: local
+#   hooks:
+#   - id: eslint
+#     name: "TypeScript: ESLint"
+#     entry: npx eslint --fix
+#     language: system
+#     pass_filenames: false
+#     args: [ --fix, starters/typescript/src ]
+#     files: \.tsx?$|\.jsx?$
+#     types: [ file ]
+
+# -------------------------------------------------------------------
+# Docker (отключено - hadolint не установлен)
+# -------------------------------------------------------------------
+# - repo: https://github.com/hadolint/hadolint
+#   rev: v2.13.1-beta
+#   hooks:
+#   - id: hadolint
+#     name: "Docker: Hadolint"
+#     args: [ --ignore=DL3008, --ignore=DL3013 ]
