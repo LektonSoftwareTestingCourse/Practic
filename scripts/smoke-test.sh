@@ -50,7 +50,7 @@ check_health "Card Management"    "http://localhost:8081/health"
 check_health "Switch"             "http://localhost:8082/health"
 check_health "Authorization"      "http://localhost:8083/health"
 check_health "Terminal Simulator" "http://localhost:8085/health"
-check_health "Merchant Simulator" "http://localhost:8086/health"
+check_health "Merchant Simulator" "http://localhost:8084/health"
 check_health "Transaction Logger" "http://localhost:8088/health"
 
 check_health "Bin Lookup"         "http://localhost:8096/actuator/health"
