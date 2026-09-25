@@ -1,0 +1,26 @@
+operation:          get, patch, delete, reserve
+pan:                valid, invalid, not_found
+card_status:        ACTIVE, BLOCKED, EXPIRED, DELETED
+amount_vs_balance:  below, equal, above, na
+daily_limit:        positive, zero, negative, na
+payload:            valid, invalid, na
+
+IF [operation] = "get" THEN [amount_vs_balance] = "na";
+IF [operation] = "get" THEN [daily_limit] = "na";
+IF [operation] = "get" THEN [payload] = "na";
+
+IF [operation] = "delete" THEN [amount_vs_balance] = "na";
+IF [operation] = "delete" THEN [daily_limit] = "na";
+IF [operation] = "delete" THEN [payload] = "na";
+
+IF [operation] = "patch" THEN [amount_vs_balance] = "na";
+IF [operation] = "patch" THEN [daily_limit] <> "na";
+IF [operation] = "patch" THEN [payload] <> "na";
+
+IF [operation] = "reserve" THEN [amount_vs_balance] <> "na";
+IF [operation] = "reserve" THEN [daily_limit] = "na";
+IF [operation] = "reserve" THEN [payload] <> "na";
+
+IF [pan] <> "valid" THEN [card_status] = "na";
+
+IF [pan] = "valid" THEN [card_status] <> "na";
