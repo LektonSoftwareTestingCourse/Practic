@@ -23,7 +23,7 @@ class ReservationTest {
 
     @ParameterizedTest(name = "amount={0}")
     @ValueSource(strings = {"1", "999", "1000"})
-    void shouldLinkRollbackToOriginalReservation(BigDecimal amount) {
+    void shouldLinkRollbackToOriginalReservationWhenStartingRollback(BigDecimal amount) {
         //Arrange
         Reservation original = reserved(amount);
 
@@ -40,7 +40,7 @@ class ReservationTest {
     }
 
     @Test
-    void shouldMarkReservationRolledBackWithoutChangingItsIdentityOrAmount() {
+    void shouldPreserveIdentityAndAmountWhenMarkingReservationRolledBack() {
         //Arrange
         Reservation original = reserved(AMOUNT);
         ReservationRollback rollback = rollbackFor(RESERVATION_ID);
@@ -59,7 +59,7 @@ class ReservationTest {
     @ParameterizedTest(name = "foreignReservationId={0}")
     @NullSource
     @ValueSource(strings = "00000000-0000-0000-0000-000000000003")
-    void shouldRejectRollbackForAnotherReservation(UUID foreignReservationId) {
+    void shouldRejectRollbackWhenItBelongsToAnotherReservation(UUID foreignReservationId) {
         //Arrange
         Reservation original = reserved(AMOUNT);
         ReservationRollback rollback = rollbackFor(foreignReservationId);

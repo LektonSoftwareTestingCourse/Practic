@@ -91,7 +91,7 @@ class TransactionRateLimitFilterTest {
 
     @ParameterizedTest(name = "{0} {1}")
     @CsvSource({"GET, /api/transactions", "POST, /api/cards", "POST, /api/transactions/search"})
-    void shouldForwardOtherRequestsWithoutApplyingTransactionLimit(String method, String path) {
+    void shouldForwardWithoutTransactionLimitWhenRequestTargetsAnotherOperation(String method, String path) {
         //Arrange
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.method(HttpMethod.valueOf(method), path).build());

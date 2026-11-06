@@ -244,7 +244,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void shouldDeclineForCardStatusBeforeCheckingExpiryAndBalance() {
+    void shouldDeclineForCardStatusWhenStatusExpiryAndBalanceAreInvalid() {
         //Arrange
         AuthorizationRequest request = validRequest();
         stubCard(card(CardModelStatus.BLOCKED, YearMonth.of(2025, 12), BigDecimal.ZERO));
@@ -259,7 +259,7 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void shouldDeclineForExpiryBeforeCheckingBalance() {
+    void shouldDeclineForExpiryWhenExpiryAndBalanceAreInvalid() {
         //Arrange
         AuthorizationRequest request = validRequest();
         stubCard(card(CardModelStatus.ACTIVE, YearMonth.of(2025, 12), BigDecimal.ZERO));

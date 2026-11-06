@@ -47,7 +47,7 @@ class InMemoryCircuitBreakerTest {
     }
 
     @Test
-    void shouldStayClosedBeforeFailureThresholdIsReached() {
+    void shouldStayClosedWhenFailureCountIsBelowThreshold() {
         //Arrange
         circuitBreaker.recordFailure(SERVICE);
 
@@ -72,7 +72,7 @@ class InMemoryCircuitBreakerTest {
 
     @ParameterizedTest(name = "elapsedMillis={0}")
     @ValueSource(longs = {0L, 9999L})
-    void shouldRejectRequestsBeforeOpenIntervalEnds(long elapsedMillis) {
+    void shouldRejectRequestsWhenOpenIntervalHasNotEnded(long elapsedMillis) {
         //Arrange
         openCircuit();
         when(clock.instant()).thenReturn(NOW.plusMillis(elapsedMillis));
@@ -99,7 +99,7 @@ class InMemoryCircuitBreakerTest {
     }
 
     @Test
-    void shouldRejectSecondProbeWhileFirstProbeIsInProgress() {
+    void shouldRejectSecondProbeWhenFirstProbeIsInProgress() {
         //Arrange
         openCircuit();
         when(clock.instant()).thenReturn(NOW.plus(OPEN_DURATION));
@@ -113,7 +113,7 @@ class InMemoryCircuitBreakerTest {
     }
 
     @Test
-    void shouldCloseAndResetFailureCountAfterSuccessfulProbe() {
+    void shouldCloseAndResetFailureCountWhenProbeSucceeds() {
         //Arrange
         openCircuit();
         when(clock.instant()).thenReturn(NOW.plus(OPEN_DURATION));

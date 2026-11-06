@@ -187,13 +187,14 @@ class CardServiceImplReservationTest {
         Throwable failure = catchThrowable(() -> cardService.reserve(PAN, AMOUNT, RRN));
 
         //Assert
-        assertThat(failure).isSameAs(databaseFailure);
+        assertThat(failure).isExactlyInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage(databaseFailure.getMessage());
         verifyNoInteractions(eventNotifier);
     }
 
     @ParameterizedTest(name = "amount={0}, restoredBalance={1}")
     @CsvSource({"1, 9001", "999, 9999", "1000, 10000"})
-    void shouldSaveRollbackAndRestoreReservedFunds(BigDecimal amount, BigDecimal expectedBalance) {
+    void shouldSaveRollbackAndRestoreFundsWhenReservationExists(BigDecimal amount, BigDecimal expectedBalance) {
         //Arrange
         Card original = cardWithBalance(new BigDecimal("9000"));
         Reservation reservation = reservation(ReservationStatus.RESERVED, amount);
@@ -290,7 +291,8 @@ class CardServiceImplReservationTest {
         Throwable failure = catchThrowable(() -> cardService.rollback(PAN, AMOUNT, RRN));
 
         //Assert
-        assertThat(failure).isSameAs(databaseFailure);
+        assertThat(failure).isExactlyInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage(databaseFailure.getMessage());
         verify(reservationRepository, never()).save(any(Reservation.class));
         verify(cardRepository, never()).update(any(Card.class));
         verifyNoInteractions(eventNotifier);

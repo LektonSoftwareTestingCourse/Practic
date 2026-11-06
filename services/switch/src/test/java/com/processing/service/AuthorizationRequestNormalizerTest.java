@@ -35,7 +35,7 @@ class AuthorizationRequestNormalizerTest {
             "TERM0001, TERM0001",
             "TERM00012, TERM0001"
     })
-    void shouldNormalizeTerminalIdToEightCharacters(String terminalId, String expected) {
+    void shouldNormalizeTerminalIdToEightCharactersWhenValueIsPresent(String terminalId, String expected) {
         //Arrange
         String original = terminalId;
 
@@ -70,7 +70,7 @@ class AuthorizationRequestNormalizerTest {
             "OTHER00000000001, OTHER0000000000",
             "MERCH000000000012, MERCH0000000000"
     })
-    void shouldNormalizeMerchantIdToFifteenCharacters(String merchantId, String expected) {
+    void shouldNormalizeMerchantIdToFifteenCharactersWhenValueIsPresent(String merchantId, String expected) {
         //Arrange
         String original = merchantId;
 

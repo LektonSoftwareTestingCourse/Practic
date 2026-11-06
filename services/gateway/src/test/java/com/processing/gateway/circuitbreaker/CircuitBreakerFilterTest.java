@@ -24,13 +24,13 @@ import reactor.test.StepVerifier;
 
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -40,23 +40,28 @@ class CircuitBreakerFilterTest {
 
     private static final String PATH = "/api/transactions";
     private static final String SERVICE = "switch";
+    private static final Duration OPEN_DURATION = Duration.ofSeconds(10);
+    private static final Instant OPENED_AT = Instant.parse("2026-01-31T12:00:00Z");
+    private static final Instant PROBE_AT = OPENED_AT.plus(OPEN_DURATION);
 
     @Mock
     private DownstreamServiceResolver serviceResolver;
     @Mock
-    private InMemoryCircuitBreaker circuitBreaker;
+    private Clock clock;
     @Mock
     private GatewayFilterChain chain;
     @Mock
     private GatewayMetrics metrics;
 
     private ObjectMapper objectMapper;
+    private InMemoryCircuitBreaker circuitBreaker;
     private CircuitBreakerFilter filter;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        filter = new CircuitBreakerFilter(objectMapper, serviceResolver, circuitBreaker, metrics, Duration.ofSeconds(10));
+        circuitBreaker = InMemoryCircuitBreaker.forTesting(OPEN_DURATION, 1, clock);
+        filter = new CircuitBreakerFilter(objectMapper, serviceResolver, circuitBreaker, metrics, OPEN_DURATION);
     }
 
     @Test
@@ -79,8 +84,8 @@ class CircuitBreakerFilterTest {
     void shouldReturnServiceUnavailableWithoutForwardingWhenCircuitIsOpen() throws Exception {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
-        when(serviceResolver.resolve(PATH)).thenReturn(Optional.of(SERVICE));
-        when(circuitBreaker.allowRequest(SERVICE)).thenReturn(false);
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT.minusMillis(1));
 
         //Act
         Mono<Void> result = filter.filter(exchange, chain);
@@ -89,7 +94,8 @@ class CircuitBreakerFilterTest {
         StepVerifier.create(result).verifyComplete();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
         assertThat(exchange.getResponse().getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
-        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER)).isEqualTo("10");
+        assertThat(exchange.getResponse().getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
+                .isEqualTo(Long.toString(OPEN_DURATION.toSeconds()));
         JsonNode error = objectMapper.readTree(exchange.getResponse().getBodyAsString().block());
         assertThat(error.path("error").asText()).isEqualTo("SERVICE_UNAVAILABLE");
         assertThat(error.path("serviceName").asText()).isEqualTo(SERVICE);
@@ -100,11 +106,12 @@ class CircuitBreakerFilterTest {
 
     @ParameterizedTest(name = "status={0}")
     @ValueSource(ints = {200, 201, 400, 401, 429})
-    void shouldRecordSuccessForCompletedResponseWithoutServerFailure(int status) {
+    void shouldCloseCircuitWhenProbeCompletesWithoutServerFailure(int status) {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
         exchange.getResponse().setStatusCode(HttpStatus.valueOf(status));
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         //Act
@@ -113,16 +120,15 @@ class CircuitBreakerFilterTest {
         //Assert
         StepVerifier.create(result).verifyComplete();
         verify(chain).filter(exchange);
-        verify(circuitBreaker).recordSuccess(SERVICE);
-        verify(circuitBreaker, never()).recordFailure(anyString());
-        verify(circuitBreaker, never()).releaseRequest(anyString());
+        assertCircuitIsClosed();
     }
 
     @Test
-    void shouldRecordSuccessWhenResponseStatusIsNotExplicitlySet() {
+    void shouldCloseCircuitWhenProbeResponseHasNoExplicitStatus() {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         //Act
@@ -130,17 +136,17 @@ class CircuitBreakerFilterTest {
 
         //Assert
         StepVerifier.create(result).verifyComplete();
-        verify(circuitBreaker).recordSuccess(SERVICE);
-        verify(circuitBreaker, never()).recordFailure(anyString());
+        assertCircuitIsClosed();
     }
 
     @ParameterizedTest(name = "status={0}")
     @ValueSource(ints = {500, 502, 503, 504})
-    void shouldRecordFailureForServerErrorResponse(int status) {
+    void shouldReopenCircuitWhenProbeResponseHasServerErrorStatus(int status) {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
         exchange.getResponse().setStatusCode(HttpStatus.valueOf(status));
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         //Act
@@ -148,18 +154,17 @@ class CircuitBreakerFilterTest {
 
         //Assert
         StepVerifier.create(result).verifyComplete();
-        verify(circuitBreaker).recordFailure(SERVICE);
-        verify(circuitBreaker, never()).recordSuccess(anyString());
-        verify(circuitBreaker, never()).releaseRequest(anyString());
+        assertCircuitHasReopened();
     }
 
     @ParameterizedTest(name = "status={0}")
     @ValueSource(ints = {404, 405})
-    void shouldReleaseProbeWithoutChangingFailureCountForUnmappedOperation(int status) {
+    void shouldAllowOnlyOneMoreProbeWhenOperationIsUnmapped(int status) {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
         exchange.getResponse().setStatusCode(HttpStatus.valueOf(status));
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.empty());
 
         //Act
@@ -167,45 +172,47 @@ class CircuitBreakerFilterTest {
 
         //Assert
         StepVerifier.create(result).verifyComplete();
-        verify(circuitBreaker).releaseRequest(SERVICE);
-        verify(circuitBreaker, never()).recordSuccess(anyString());
-        verify(circuitBreaker, never()).recordFailure(anyString());
+        assertCircuitAllowsAnotherProbe();
     }
 
     @ParameterizedTest(name = "failure={0}")
     @MethodSource("connectionFailures")
-    void shouldRecordFailureAndPropagateDownstreamConnectionError(Throwable error) {
+    void shouldReopenCircuitAndPropagateErrorWhenProbeConnectionFails(Throwable error) {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.error(error));
 
         //Act
         Mono<Void> result = filter.filter(exchange, chain);
 
         //Assert
-        StepVerifier.create(result).expectErrorSatisfies(failure -> assertThat(failure).isSameAs(error)).verify();
-        verify(circuitBreaker).recordFailure(SERVICE);
-        verify(circuitBreaker, never()).recordSuccess(anyString());
-        verify(circuitBreaker, never()).releaseRequest(anyString());
+        StepVerifier.create(result)
+                .expectErrorSatisfies(failure -> assertThat(failure)
+                        .isExactlyInstanceOf(error.getClass()).hasMessage(error.getMessage()))
+                .verify();
+        assertCircuitHasReopened();
     }
 
     @Test
-    void shouldReleaseProbeAndPropagateApplicationError() {
+    void shouldAllowOnlyOneMoreProbeAndPropagateErrorWhenApplicationFails() {
         //Arrange
         MockServerWebExchange exchange = transactionExchange();
         var error = new IllegalArgumentException("Invalid operation");
-        stubAllowedRoute();
+        stubDownstreamRoute();
+        openCircuitThenAdvanceTo(PROBE_AT);
         when(chain.filter(exchange)).thenReturn(Mono.error(error));
 
         //Act
         Mono<Void> result = filter.filter(exchange, chain);
 
         //Assert
-        StepVerifier.create(result).expectErrorSatisfies(failure -> assertThat(failure).isSameAs(error)).verify();
-        verify(circuitBreaker).releaseRequest(SERVICE);
-        verify(circuitBreaker, never()).recordSuccess(anyString());
-        verify(circuitBreaker, never()).recordFailure(anyString());
+        StepVerifier.create(result)
+                .expectErrorSatisfies(failure -> assertThat(failure)
+                        .isExactlyInstanceOf(IllegalArgumentException.class).hasMessage(error.getMessage()))
+                .verify();
+        assertCircuitAllowsAnotherProbe();
     }
 
     private static Stream<Throwable> connectionFailures() {
@@ -216,9 +223,33 @@ class CircuitBreakerFilterTest {
                 new IllegalStateException("Wrapped error", new ConnectException("Connection refused")));
     }
 
-    private void stubAllowedRoute() {
+    private void stubDownstreamRoute() {
         when(serviceResolver.resolve(PATH)).thenReturn(Optional.of(SERVICE));
-        when(circuitBreaker.allowRequest(SERVICE)).thenReturn(true);
+    }
+
+    private void openCircuitThenAdvanceTo(Instant requestTime) {
+        when(clock.instant()).thenReturn(OPENED_AT);
+        circuitBreaker.recordFailure(SERVICE);
+        when(clock.instant()).thenReturn(requestTime);
+    }
+
+    private void assertCircuitIsClosed() {
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("first request").isTrue();
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("second request").isTrue();
+    }
+
+    private void assertCircuitHasReopened() {
+        Instant nextProbeAt = PROBE_AT.plus(OPEN_DURATION);
+        when(clock.instant()).thenReturn(nextProbeAt.minusMillis(1));
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("before the new open interval ends").isFalse();
+
+        when(clock.instant()).thenReturn(nextProbeAt);
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("probe after the new open interval").isTrue();
+    }
+
+    private void assertCircuitAllowsAnotherProbe() {
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("available probe").isTrue();
+        assertThat(circuitBreaker.allowRequest(SERVICE)).as("second probe while the first is in progress").isFalse();
     }
 
     private MockServerWebExchange transactionExchange() {

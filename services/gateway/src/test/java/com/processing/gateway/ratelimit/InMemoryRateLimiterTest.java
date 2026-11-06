@@ -43,7 +43,7 @@ class InMemoryRateLimiterTest {
     }
 
     @Test
-    void shouldAllowRequestThatConsumesLastToken() {
+    void shouldAllowRequestWhenItConsumesLastToken() {
         //Arrange
         InMemoryRateLimiter limiter = limiter(2, 1);
         limiter.allowRequest(CLIENT);
@@ -70,7 +70,7 @@ class InMemoryRateLimiterTest {
     }
 
     @Test
-    void shouldKeepSeparateBucketsForDifferentClients() {
+    void shouldKeepSeparateBucketsWhenClientsDiffer() {
         //Arrange
         InMemoryRateLimiter limiter = limiter(1, 0);
         limiter.allowRequest(CLIENT);
@@ -84,7 +84,7 @@ class InMemoryRateLimiterTest {
 
     @ParameterizedTest(name = "elapsedNanos={0}, allowed={1}")
     @CsvSource({"0, false", "499999999, false", "500000000, true", "1000000000, true"})
-    void shouldRefillTokenAtConfiguredRate(long elapsedNanos, boolean expected) {
+    void shouldApplyConfiguredRefillRateWhenRequestArrives(long elapsedNanos, boolean expected) {
         //Arrange
         InMemoryRateLimiter limiter = limiter(1, 2);
         limiter.allowRequest(CLIENT);
@@ -98,7 +98,7 @@ class InMemoryRateLimiterTest {
     }
 
     @Test
-    void shouldKeepFractionalTokensBetweenRequests() {
+    void shouldKeepFractionalTokensWhenRequestsArriveBeforeRefillCompletes() {
         //Arrange
         InMemoryRateLimiter limiter = limiter(1, 2);
         limiter.allowRequest(CLIENT);
@@ -114,7 +114,7 @@ class InMemoryRateLimiterTest {
     }
 
     @Test
-    void shouldLimitRefilledTokensToBucketCapacity() {
+    void shouldCapRefilledTokensWhenBucketCapacityWouldBeExceeded() {
         //Arrange
         InMemoryRateLimiter limiter = limiter(2, 1);
         limiter.allowRequest(CLIENT);
@@ -160,7 +160,7 @@ class InMemoryRateLimiterTest {
 
     @ParameterizedTest(name = "idleMillis={0}, allowed={1}")
     @CsvSource({"9999, false", "10000, true", "10001, true"})
-    void shouldCreateNewBucketAfterIdleExpiration(long idleMillis, boolean expected) {
+    void shouldApplyIdleExpirationWhenClientReturns(long idleMillis, boolean expected) {
         //Arrange
         InMemoryRateLimiter limiter = InMemoryRateLimiter.forTesting(1, 0, Duration.ofSeconds(10), 100, ticker);
         limiter.allowRequest(CLIENT);

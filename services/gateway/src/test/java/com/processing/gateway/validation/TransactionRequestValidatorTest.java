@@ -20,7 +20,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "amount={0}")
     @ValueSource(strings = {"0.01", "1", "1000"})
-    void shouldAcceptValidTransactionWithPositiveAmount(BigDecimal amount) {
+    void shouldAcceptTransactionWhenAmountIsPositive(BigDecimal amount) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().amount(amount).build();
 
@@ -32,7 +32,7 @@ class TransactionRequestValidatorTest {
     }
 
     @Test
-    void shouldAcceptMissingIssuerAndTerminalTypeBeforeRouting() {
+    void shouldAcceptRequestWhenIssuerAndTerminalTypeAreMissingBeforeRouting() {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().issuerId(null).terminalType(null).build();
 
@@ -44,7 +44,7 @@ class TransactionRequestValidatorTest {
     }
 
     @Test
-    void shouldRejectMissingRequestBody() {
+    void shouldRejectRequestWhenBodyIsMissing() {
         //Arrange
         AuthorizationRequest request = null;
 
@@ -57,7 +57,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "{index}: missing {0}")
     @MethodSource("requestsWithMissingRequiredFields")
-    void shouldRejectMissingOrBlankRequiredField(String field, AuthorizationRequest request) {
+    void shouldRejectRequestWhenRequiredFieldIsMissingOrBlank(String field, AuthorizationRequest request) {
         //Arrange
         String expectedMessage = "Field '" + field + "' is required";
 
@@ -69,7 +69,7 @@ class TransactionRequestValidatorTest {
     }
 
     @Test
-    void shouldRejectMissingTransactionTime() {
+    void shouldRejectRequestWhenTransactionTimeIsMissing() {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().transmissionDateTime(null).build();
 
@@ -83,7 +83,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "mti={0}")
     @ValueSource(strings = {"0200", "0400", "9999"})
-    void shouldRejectUnsupportedMti(String mti) {
+    void shouldRejectRequestWhenMtiIsUnsupported(String mti) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().mti(mti).build();
 
@@ -96,7 +96,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "pan={0}")
     @ValueSource(strings = {"400000345873023", "40000034587302370", "400000345873023A"})
-    void shouldRejectPanThatIsNotExactlySixteenDigits(String pan) {
+    void shouldRejectRequestWhenPanIsNotExactlySixteenDigits(String pan) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().pan(pan).build();
 
@@ -109,7 +109,7 @@ class TransactionRequestValidatorTest {
     }
 
     @Test
-    void shouldRejectMissingAmount() {
+    void shouldRejectRequestWhenAmountIsMissing() {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().amount(null).build();
 
@@ -122,7 +122,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "amount={0}")
     @ValueSource(strings = {"0", "0.00", "-0.01", "-1"})
-    void shouldRejectNonPositiveAmount(BigDecimal amount) {
+    void shouldRejectRequestWhenAmountIsNotPositive(BigDecimal amount) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().amount(amount).build();
 
@@ -135,7 +135,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "currency={0}")
     @ValueSource(strings = {"64", "6430"})
-    void shouldRejectCurrencyCodeWithInvalidLength(String currencyCode) {
+    void shouldRejectRequestWhenCurrencyCodeLengthIsInvalid(String currencyCode) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().currencyCode(currencyCode).build();
 
@@ -149,7 +149,7 @@ class TransactionRequestValidatorTest {
 
     @ParameterizedTest(name = "mcc={0}")
     @ValueSource(strings = {"123", "12345", "12A4"})
-    void shouldRejectMccThatIsNotExactlyFourDigits(String mcc) {
+    void shouldRejectRequestWhenMccIsNotExactlyFourDigits(String mcc) {
         //Arrange
         AuthorizationRequest request = validRequestBuilder().mcc(mcc).build();
 

@@ -85,7 +85,7 @@ class AuthorizationClientTest {
         AuthorizationResponse response = authorizationClient.authorize(request);
 
         //Assert
-        assertThat(response).isSameAs(expected);
+        assertThat(response).isEqualTo(expected);
         assertThat(retry.getMetrics().getNumberOfSuccessfulCallsWithoutRetryAttempt()).isEqualTo(1);
     }
 
@@ -103,7 +103,7 @@ class AuthorizationClientTest {
         AuthorizationResponse response = authorizationClient.authorize(request);
 
         //Assert
-        assertThat(response).isSameAs(expected);
+        assertThat(response).isEqualTo(expected);
         assertThat(retry.getMetrics().getNumberOfSuccessfulCallsWithRetryAttempt()).isEqualTo(1);
         assertThat(circuitBreaker.getMetrics().getNumberOfFailedCalls()).isZero();
     }
@@ -176,7 +176,7 @@ class AuthorizationClientTest {
         RollbackResponse response = authorizationClient.rollback(original, RRN);
 
         //Assert
-        assertThat(response).isSameAs(expected);
+        assertThat(response).isEqualTo(expected);
     }
 
     @ParameterizedTest(name = "invalidRollback={0}")

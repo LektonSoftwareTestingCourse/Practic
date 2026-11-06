@@ -26,7 +26,7 @@ class CardTest {
 
     @ParameterizedTest(name = "daily={0}, monthly={1}")
     @CsvSource({"0, 0", "0, 1", "999, 1000", "1000, 1000"})
-    void shouldAcceptNonNegativeLimitsUpToMonthlyLimit(BigDecimal dailyLimit, BigDecimal monthlyLimit) {
+    void shouldAcceptLimitsWhenNonNegativeAndNotAboveMonthlyLimit(BigDecimal dailyLimit, BigDecimal monthlyLimit) {
         //Arrange
         Card original = activeCard();
 
@@ -49,7 +49,7 @@ class CardTest {
             "1000, -1, Limit can not contain negative values",
             "1001, 1000, Daily limit can not be larger than monthly limit"
     })
-    void shouldRejectInvalidLimits(BigDecimal dailyLimit, BigDecimal monthlyLimit, String message) {
+    void shouldRejectLimitsWhenNegativeOrDailyExceedsMonthly(BigDecimal dailyLimit, BigDecimal monthlyLimit, String message) {
         //Arrange
         Card original = activeCard();
 
@@ -65,7 +65,7 @@ class CardTest {
     @ParameterizedTest(name = "reservationPan={0}")
     @NullSource
     @ValueSource(strings = SECOND_PAN)
-    void shouldRejectReservationBelongingToAnotherCard(String reservationPan) {
+    void shouldRejectReservationWhenItBelongsToAnotherCard(String reservationPan) {
         //Arrange
         Card original = activeCard();
         Reservation reservation = new Reservation(
@@ -83,7 +83,7 @@ class CardTest {
     @ParameterizedTest(name = "rollbackPan={0}")
     @NullSource
     @ValueSource(strings = SECOND_PAN)
-    void shouldRejectRollbackBelongingToAnotherCard(String rollbackPan) {
+    void shouldRejectRollbackWhenItBelongsToAnotherCard(String rollbackPan) {
         //Arrange
         Card original = activeCard();
         ReservationRollback rollback = new ReservationRollback(

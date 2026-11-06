@@ -75,7 +75,7 @@ class AuthServiceImplLimitsTest {
 
     @ParameterizedTest(name = "updatedRows={0}, accepted={1}")
     @CsvSource({"0, false", "1, true"})
-    void shouldReportWhetherRepositoryAcceptedLimitUsage(int updatedRows, boolean expected) {
+    void shouldReportAcceptanceWhenRepositoryReturnsUpdatedRowCount(int updatedRows, boolean expected) {
         //Arrange
         CardModel card = activeCard();
         when(limitUsageRepository.upsertLimitUsage(PAN, TRANSACTION_DATE, AMOUNT, DAILY_LIMIT, MONTHLY_LIMIT))

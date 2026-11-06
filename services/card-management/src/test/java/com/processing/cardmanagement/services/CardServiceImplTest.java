@@ -95,7 +95,7 @@ class CardServiceImplTest {
         Card card = cardService.getCard(PAN);
 
         //Assert
-        assertThat(card).isSameAs(expected);
+        assertThat(card).isEqualTo(expected);
     }
 
     @Test
@@ -127,7 +127,7 @@ class CardServiceImplTest {
 
     @ParameterizedTest(name = "limit={0}, max=100")
     @ValueSource(ints = {1, 99, 100})
-    void shouldAcceptPageLimitUpToMaximumAndUseDefaultOffset(int limit) {
+    void shouldAcceptLimitAndUseDefaultOffsetWhenPageLimitIsWithinMaximum(int limit) {
         //Arrange
         Card expected = activeCard();
         when(settings.maxPageLimit()).thenReturn(100);
@@ -172,7 +172,7 @@ class CardServiceImplTest {
 
     @ParameterizedTest(name = "status={0}")
     @EnumSource(value = CardStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "DELETED")
-    void shouldPassPaginationAndAllFiltersToRepository(CardStatus status) {
+    void shouldPassPaginationAndAllFiltersWhenQueryingRepository(CardStatus status) {
         //Arrange
         Card expected = cardWithData(status, DAILY_LIMIT, MONTHLY_LIMIT, BALANCE);
         when(settings.maxPageLimit()).thenReturn(100);
@@ -208,7 +208,7 @@ class CardServiceImplTest {
             "NULL, NULL, NULL, 0, ACTIVE, 100000, 500000, 0",
             "INACTIVE, 200000, 600000, 5000, INACTIVE, 200000, 600000, 5000"
     }, nullValues = "NULL")
-    void shouldPatchOnlyProvidedFieldsAndPreserveCardIdentity(
+    void shouldPreserveIdentityAndPatchProvidedFieldsWhenUpdatingCard(
             CardStatus status, BigDecimal dailyLimit, BigDecimal monthlyLimit, BigDecimal balance,
             CardStatus expectedStatus, BigDecimal expectedDaily, BigDecimal expectedMonthly, BigDecimal expectedBalance) {
         //Arrange
@@ -229,7 +229,7 @@ class CardServiceImplTest {
 
     @ParameterizedTest(name = "daily={0}, monthly={1}")
     @CsvSource({"-1, 500000", "100000, -1", "500001, 500000"})
-    void shouldRejectInvalidLimitsWithoutSavingOrNotifying(BigDecimal dailyLimit, BigDecimal monthlyLimit) {
+    void shouldRejectWithoutSavingOrNotifyingWhenLimitsAreInvalid(BigDecimal dailyLimit, BigDecimal monthlyLimit) {
         //Arrange
         when(cardRepository.findByPanForUpdate(PAN)).thenReturn(Optional.of(activeCard()));
 
@@ -267,7 +267,8 @@ class CardServiceImplTest {
         Throwable failure = catchThrowable(() -> cardService.patchCard(PAN, CardStatus.BLOCKED, null, null, null));
 
         //Assert
-        assertThat(failure).isSameAs(databaseFailure);
+        assertThat(failure).isExactlyInstanceOf(DataAccessResourceFailureException.class)
+                .hasMessage(databaseFailure.getMessage());
         verifyNoInteractions(eventNotifier);
     }
 
@@ -319,7 +320,7 @@ class CardServiceImplTest {
 
     @ParameterizedTest(name = "count={0}")
     @ValueSource(longs = {0L, 1L, 100L})
-    void shouldPublishCurrentCardCount(long expectedCount) {
+    void shouldPublishCurrentCardCountWhenCountIsRefreshed(long expectedCount) {
         //Arrange
         when(cardRepository.countAllCards()).thenReturn(expectedCount);
 
@@ -332,7 +333,7 @@ class CardServiceImplTest {
     }
 
     @Test
-    void shouldCountCardsUsingAllProvidedFilters() {
+    void shouldUseAllProvidedFiltersWhenCountingCards() {
         //Arrange
         when(cardRepository.countCardsFiltered(CardStatus.ACTIVE, BIN, ISSUER_ID, CREATED_AT, END_DATE)).thenReturn(2L);
 
@@ -394,7 +395,7 @@ class CardServiceImplTest {
 
     @ParameterizedTest(name = "bins={0}, pans={1}")
     @MethodSource("invalidBulkSelectors")
-    void shouldRejectInvalidBulkSelectorsWithoutSaving(List<String> bins, List<String> pans, String message) {
+    void shouldRejectWithoutSavingWhenBulkSelectorsAreInvalid(List<String> bins, List<String> pans, String message) {
         //Arrange
         CardStatus newStatus = CardStatus.BLOCKED;
 

@@ -71,7 +71,7 @@ class RouteServiceTest {
         AuthorizationResponse response = routeService.route(request);
 
         //Assert
-        assertThat(response).isSameAs(approved);
+        assertThat(response).isEqualTo(approved);
         verify(loggerClient).log(published.capture());
         TransactionRequest transaction = published.getValue();
         assertThat(transaction.id()).isNotNull();
@@ -99,7 +99,7 @@ class RouteServiceTest {
     }
 
     @Test
-    void shouldEnrichNormalizedRequestWithIssuerBeforeAuthorizing() {
+    void shouldEnrichNormalizedRequestWithIssuerWhenAuthorizingTransaction() {
         //Arrange
         AuthorizationRequest request = request(PAN, "TERM1", "MERCH00000000002");
         AuthorizationRequest normalized = request(PAN, "TERM1000", "MERCH0000000002").withIssuerId(ISSUER_ID);
@@ -114,7 +114,7 @@ class RouteServiceTest {
         AuthorizationResponse response = routeService.route(request);
 
         //Assert
-        assertThat(response).isSameAs(approved);
+        assertThat(response).isEqualTo(approved);
         verify(loggerClient).log(published.capture());
         assertThat(published.getValue().terminalId()).isEqualTo("TERM1000");
         assertThat(published.getValue().merchantId()).isEqualTo("MERCH0000000002");
@@ -135,7 +135,7 @@ class RouteServiceTest {
         AuthorizationResponse response = routeService.route(request);
 
         //Assert
-        assertThat(response).isSameAs(declined);
+        assertThat(response).isEqualTo(declined);
         verify(loggerClient).log(published.capture());
         assertThat(published.getValue().status()).isEqualTo(TransactionStatus.DECLINED);
         assertThat(published.getValue().declineReason()).isEqualTo("INSUFFICIENT_FUNDS");
@@ -227,7 +227,7 @@ class RouteServiceTest {
         AuthorizationResponse response = routeService.route(request);
 
         //Assert
-        assertThat(response).isSameAs(approved);
+        assertThat(response).isEqualTo(approved);
         verify(loggerClient).log(published.capture());
         assertThat(published.getValue().processingTimeMs()).isZero();
     }

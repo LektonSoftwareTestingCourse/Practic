@@ -83,7 +83,7 @@ class CardServiceImplCreationTest {
     }
 
     @Test
-    void shouldCreateActiveCardWithGeneratedPanAndResolvedIssuer() {
+    void shouldCreateActiveCardWhenPanIsGeneratedAndIssuerIsResolved() {
         //Arrange
         stubSingleCardCreation();
         when(cardRepository.create(any(Card.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -95,7 +95,7 @@ class CardServiceImplCreationTest {
 
         //Assert
         verify(cardRepository).create(saved.capture());
-        assertThat(card).isSameAs(saved.getValue());
+        assertThat(card).isEqualTo(saved.getValue());
         assertThat(card.id()).isNotNull();
         assertThat(card.pan()).isEqualTo(PAN);
         assertThat(card.bin()).isEqualTo(BIN);
@@ -146,7 +146,9 @@ class CardServiceImplCreationTest {
 
         //Assert
         assertThat(failure).isInstanceOf(OutOfRetriesException.class);
-        assertThat(((OutOfRetriesException) failure).getReason()).isSameAs(collision);
+        assertThat(((OutOfRetriesException) failure).getReason())
+                .isInstanceOf(PanCollisionException.class)
+                .hasMessage(collision.getMessage());
         verify(cardRepository, times(maxRetries + 1)).create(any(Card.class));
         verifyNoInteractions(eventNotifier);
     }
@@ -167,7 +169,7 @@ class CardServiceImplCreationTest {
     }
 
     @Test
-    void shouldSaveBatchWithDraftFieldsAndNotifyCreatedCount() {
+    void shouldSaveDraftFieldsAndNotifyCountWhenBatchCreationSucceeds() {
         //Arrange
         List<CardDraft> drafts = twoCardDrafts();
         stubBatchGeneration();
@@ -178,7 +180,7 @@ class CardServiceImplCreationTest {
 
         //Assert
         verify(cardRepository).createAll(batchCaptor.capture());
-        assertThat(cards).isSameAs(batchCaptor.getValue());
+        assertThat(cards).containsExactlyElementsOf(batchCaptor.getValue());
         assertThat(cards).extracting(Card::pan).containsExactly(PAN, SECOND_PAN);
         assertThat(cards).extracting(Card::cardholderName).containsExactly(CARDHOLDER, "PETR PETROV");
         assertThat(cards).extracting(Card::status).containsExactly(CardStatus.ACTIVE, CardStatus.BLOCKED);

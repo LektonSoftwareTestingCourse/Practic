@@ -53,7 +53,7 @@ class TransactionValidationFilterTest {
     }
 
     @Test
-    void shouldForwardValidatedRequestWithOriginalBodyAndContentLength() throws Exception {
+    void shouldForwardOriginalBodyAndContentLengthWhenTransactionIsValid() throws Exception {
         //Arrange
         String body = objectMapper.writeValueAsString(requestWithAmount(new BigDecimal("1000")));
         MockServerWebExchange exchange = transactionExchange(body);
@@ -75,7 +75,7 @@ class TransactionValidationFilterTest {
 
     @ParameterizedTest(name = "invalidJson={0}")
     @ValueSource(strings = {"", "{", "[]"})
-    void shouldRejectMalformedJsonWithoutForwarding(String body) throws Exception {
+    void shouldRejectWithoutForwardingWhenJsonIsMalformed(String body) throws Exception {
         //Arrange
         MockServerWebExchange exchange = transactionExchange(body);
 
@@ -95,7 +95,7 @@ class TransactionValidationFilterTest {
     }
 
     @Test
-    void shouldRejectInvalidTransactionAndReturnValidationReason() throws Exception {
+    void shouldReturnValidationReasonWhenTransactionIsInvalid() throws Exception {
         //Arrange
         String body = objectMapper.writeValueAsString(requestWithAmount(BigDecimal.ZERO));
         MockServerWebExchange exchange = transactionExchange(body);
@@ -114,7 +114,7 @@ class TransactionValidationFilterTest {
     }
 
     @Test
-    void shouldRejectJsonNullAsMissingTransaction() throws Exception {
+    void shouldRejectMissingTransactionWhenJsonBodyIsNull() throws Exception {
         //Arrange
         MockServerWebExchange exchange = transactionExchange("null");
 
@@ -132,7 +132,7 @@ class TransactionValidationFilterTest {
 
     @ParameterizedTest(name = "{0} {1}")
     @CsvSource({"GET, /api/transactions", "POST, /api/cards", "POST, /api/transactions/search"})
-    void shouldForwardOtherRequestsWithoutTransactionValidation(String method, String path) {
+    void shouldForwardWithoutTransactionValidationWhenRequestTargetsAnotherOperation(String method, String path) {
         //Arrange
         MockServerWebExchange exchange = MockServerWebExchange.from(
                 MockServerHttpRequest.method(HttpMethod.valueOf(method), path).build());

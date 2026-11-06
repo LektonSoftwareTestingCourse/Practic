@@ -37,7 +37,7 @@ class LoggerClientTest {
     }
 
     @Test
-    void shouldPublishTransactionToConfiguredExchangeAndRoutingKey() {
+    void shouldPublishToConfiguredExchangeAndRoutingKeyWhenLoggingTransaction() {
         //Arrange
         TransactionRequest transaction = approvedTransaction();
 
