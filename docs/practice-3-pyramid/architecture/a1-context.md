@@ -30,4 +30,3 @@ flowchart LR
 - Merchant Acquirer вызывает Gateway и предоставляет endpoint комиссии: [`SimulationController.java`](../../../services/merchant-acquirer/src/main/java/com/processing/merchantacquirer/controller/SimulationController.java).
 - Dashboard использует REST и WebSocket: [`nginx.conf`](../../../services/dashboard/nginx.conf), [`useWebSocket.ts`](../../../services/dashboard/src/hooks/useWebSocket.ts).
 - Authorization обращается к BIN Lookup: [`BinLookupClient.java`](../../../services/authorization/src/main/java/com/processing/authorization/client/BinLookupClient.java).
-

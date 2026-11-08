@@ -65,4 +65,3 @@ stateDiagram-v2
 - В [`ReservationStatus.java`](../../../services/card-management/src/main/java/com/processing/cardmanagement/models/ReservationStatus.java) есть два статуса: `RESERVED` и `ROLLED_BACK`.
 - Сначала резервирование создаётся со статусом `RESERVED`.
 - Если выполняется rollback, в [`Reservation.java`](../../../services/card-management/src/main/java/com/processing/cardmanagement/models/Reservation.java) статус меняется на `ROLLED_BACK`, а деньги возвращаются на баланс карты.
-
