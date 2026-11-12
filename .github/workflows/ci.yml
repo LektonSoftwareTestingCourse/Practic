@@ -13,7 +13,6 @@ name: CI Pipeline
 # PR — только для инфраструктурных изменений от преподавателей в эталонном репозитории.
 
 on:
-  workflow_dispatch:
   push:
     branches:
     - '**'
@@ -89,8 +88,21 @@ jobs:
     - name: Run java linter
       run: mvn -f services/pom.xml -P${{ matrix.service }} checkstyle:check
 
-    - name: Build services (tests skipped until students add them)
-      run: mvn -f services/pom.xml -P${{ matrix.service }} install -Dcheckstyle.skip=true -DskipTests
+    - name: Build other Java modules (keep existing CI scope)
+      if: matrix.service != 'gateway' && matrix.service != 'switch' && matrix.service != 'authorization' && matrix.service != 'card-management'
+      run: mvn -f services/pom.xml -P${{ matrix.service }} package -DskipTests
+
+    - name: Run practice 4 unit tests and JaCoCo verification
+      if: matrix.service == 'gateway' || matrix.service == 'switch' || matrix.service == 'authorization' || matrix.service == 'card-management'
+      run: mvn -f services/pom.xml -P${{ matrix.service }} verify -Dcheckstyle.skip=true
+
+    - name: Upload JaCoCo report
+      if: always() && (matrix.service == 'gateway' || matrix.service == 'switch' || matrix.service == 'authorization' || matrix.service == 'card-management')
+      uses: actions/upload-artifact@v4
+      with:
+        name: jacoco-report-${{ matrix.service }}
+        path: services/${{ matrix.service }}/target/site/jacoco/
+        if-no-files-found: error
 
   frontend-dashboard:
     runs-on: ubuntu-latest
