@@ -141,4 +141,3 @@ $env:PRACTICE5_REPETITIONS = 3
 mvn -B -f services/pom.xml -P api-tests verify
 ```
 
-
