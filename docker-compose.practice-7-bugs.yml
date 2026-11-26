@@ -1,0 +1,17 @@
+# Практика 7: сборка СМП с внесёнными дефектами.
+#
+# Порядок:
+#   1. docker compose down -v
+#   2. docker compose -f docker-compose.yaml -f docker-compose.practice-7-bugs.yml up -d
+#   3. прогнать E2E-набор, разобрать падения, оформить баг-репорты
+#   4. вернуться на обычную сборку: docker compose down -v && docker compose up -d
+#
+# Образы с тегом practice-7-bugs публикуются курсом. Сброс volume (down -v)
+# обязателен: один из дефектов меняет миграции БД.
+services:
+  authorization:
+    image: ghcr.io/${GHCR_USER:-local}/smp-authorization:practice-7-bugs
+  card-management:
+    image: ghcr.io/${GHCR_USER:-local}/smp-card-management:practice-7-bugs
+  switch:
+    image: ghcr.io/${GHCR_USER:-local}/smp-switch:practice-7-bugs
