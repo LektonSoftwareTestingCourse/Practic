@@ -16,6 +16,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Глобальный обработчик исключений.
@@ -32,10 +33,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException exception) {
-        String message = exception.getFieldErrors().stream()
+        String fieldMessages = exception.getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .sorted()
                 .collect(Collectors.joining("; "));
+        String objectMessages = exception.getGlobalErrors().stream()
+                .map(error -> error.getDefaultMessage() == null ? "Validation failed" : error.getDefaultMessage())
+                .collect(Collectors.joining("; "));
+        String message = Stream.of(fieldMessages, objectMessages)
+                .filter(value -> !value.isBlank())
+                .collect(Collectors.joining("; "));
+        if (message.isBlank()) {
+            message = "Request validation failed";
+        }
 
         return ResponseEntity.badRequest().body(errorResponse(
                 "Validation error",

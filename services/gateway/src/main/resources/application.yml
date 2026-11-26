@@ -95,6 +95,36 @@ spring:
           serviceName: merchantSimulator
         predicates:
           - Path=/api/simulator/merchant/**
+      - id: merchant-list
+        uri: ${MERCHANT_SIM_URL:http://localhost:8084}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchants
+      - id: merchant-list
+        uri: ${MERCHANT_SIM_URL:http://localhost:8084}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchants
+      - id: merchant-list
+        uri: ${MERCHANT_SIM_URL:http://localhost:8084}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchants
+      - id: merchant-list
+        uri: ${MERCHANT_SIM_URL:http://localhost:8084}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchants
+      - id: merchant-list
+        uri: ${MERCHANT_SIM_URL:http://localhost:8084}
+        metadata:
+          serviceName: merchantSimulator
+        predicates:
+          - Path=/api/simulator/merchants
       - id: cards
         uri: ${CARD_MGMT_URL:http://localhost:8081}
         metadata:

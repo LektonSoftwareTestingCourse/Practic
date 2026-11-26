@@ -1,0 +1,9 @@
+operation_type:     create, read, update, delete
+pan_validity:       valid, too_short, too_long, luhn_fail
+expiry_format:      valid_mmyy, invalid_month, past_date
+card_status:        active, inactive, blocked
+user_role:          admin, user, guest
+channel:            api, web, mobile
+
+IF [operation_type] = "create" OR [operation_type] = "update" THEN [pan_validity] <> "luhn_fail";
+IF [user_role] = "guest" THEN [operation_type] = "read";

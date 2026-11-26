@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -63,7 +64,7 @@ public class GlobalExceptionHandler {
             .findFirst();
 
         var errorMessage = fieldError
-            .map(FieldError::getDefaultMessage)
+            .map(error -> error.getField() + ": " + error.getDefaultMessage())
             .orElse("Constraint violation");
 
         if (fieldError.isEmpty()) {
@@ -80,6 +81,22 @@ public class GlobalExceptionHandler {
         return new ErrorResponse(
             ex.getClass().getSimpleName(),
             errorMessage,
+            Instant.now(),
+            serviceName,
+            null
+        );
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleMethodArgumentTypeMismatchException(
+        MethodArgumentTypeMismatchException ex
+    ) {
+        String message = "Invalid value for parameter '" + ex.getName() + "'";
+        log.warn("{}: {}", message, ex.getValue());
+        return new ErrorResponse(
+            ex.getClass().getSimpleName(),
+            message,
             Instant.now(),
             serviceName,
             null

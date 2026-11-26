@@ -1,0 +1,7 @@
+# Test-only override: Card Management limits list requests to 500 rows. The
+# application.yml configures 10,000 cards, which exceeds that API limit.
+# Keep this override scoped to the practice-5 test stack.
+services:
+  terminal-simulator:
+    environment:
+      SIMULATOR_CARDSAMOUNT: 500

@@ -14,81 +14,89 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CardCriteriaBuilderJpaRepositoryImpl
-    implements CardCriteriaBuilderJpaRepository {
+        implements CardCriteriaBuilderJpaRepository {
 
     @PersistenceContext
     private EntityManager entityManager;
 
     @Override
     public List<CardEntity> findCards(
-        int limit,
-        long offset,
-        @Nullable String status,
-        @Nullable String bin,
-        @Nullable String issuerId,
-        @Nullable Instant startDate,
-        @Nullable Instant endDate
+            int limit,
+            long offset,
+            @Nullable String status,
+            @Nullable String bin,
+            @Nullable String issuerId,
+            @Nullable Instant startDate,
+            @Nullable Instant endDate
     ) {
         var criteriaBuilder = entityManager.getCriteriaBuilder();
         var criteriaQuery = criteriaBuilder.createQuery(CardEntity.class);
         var cardEntity = criteriaQuery.from(CardEntity.class);
         var predicates = createFiltersPredicate(
-            criteriaBuilder,
-            cardEntity,
-            status,
-            bin,
-            issuerId,
-            startDate,
-            endDate
+                criteriaBuilder,
+                cardEntity,
+                status,
+                bin,
+                issuerId,
+                startDate,
+                endDate
         );
 
         criteriaQuery
-            .select(cardEntity)
-            .where(predicates.toArray(Predicate[]::new));
+                .select(cardEntity)
+                .where(predicates.toArray(Predicate[]::new))
+                // The merchant simulator requests the first ACTIVE cards. Without an
+                // explicit order the database may return any historical card, including
+                // cards with depleted balances. Prefer the newest cards deterministically
+                // so freshly provisioned cards are eligible for an immediate simulation.
+                .orderBy(
+                        criteriaBuilder.desc(cardEntity.get(CardEntity_.createdAt)),
+                        criteriaBuilder.desc(cardEntity.get(CardEntity_.id))
+                );
         return entityManager
-            .createQuery(criteriaQuery)
-            .setMaxResults(limit)
-            .setFirstResult((int) offset)
-            .getResultList();
+                .createQuery(criteriaQuery)
+                .setMaxResults(limit)
+                .setFirstResult((int) offset)
+                .getResultList();
     }
 
     @Override
     public long countCards(
-        @Nullable String status,
-        @Nullable String bin,
-        @Nullable String issuerId,
-        @Nullable Instant startDate,
-        @Nullable Instant endDate
+            @Nullable String status,
+            @Nullable String bin,
+            @Nullable String issuerId,
+            @Nullable Instant startDate,
+            @Nullable Instant endDate
     ) {
         var criteriaBuilder = entityManager.getCriteriaBuilder();
         var criteriaQuery = criteriaBuilder.createQuery(Long.class);
         var cardEntity = criteriaQuery.from(CardEntity.class);
         var predicates = createFiltersPredicate(
-            criteriaBuilder,
-            cardEntity,
-            status,
-            bin,
-            issuerId,
-            startDate,
-            endDate
+                criteriaBuilder,
+                cardEntity,
+                status,
+                bin,
+                issuerId,
+                startDate,
+                endDate
         );
 
         criteriaQuery
-            .select(criteriaBuilder.count(cardEntity))
-            .where(criteriaBuilder.and(predicates.toArray(Predicate[]::new)));
+                .select(criteriaBuilder.count(cardEntity))
+                .where(criteriaBuilder.and(predicates.toArray(Predicate[]::new)));
         return entityManager
-            .createQuery(criteriaQuery)
-            .getSingleResult();
+                .createQuery(criteriaQuery)
+                .getSingleResult();
     }
 
     private List<Predicate> createFiltersPredicate(
-        CriteriaBuilder criteriaBuilder,
-        Root<CardEntity> root,
-        @Nullable String status,
-        @Nullable String bin,
-        @Nullable String issuerId,
-        @Nullable Instant startDate,
-        @Nullable Instant endDate
+            CriteriaBuilder criteriaBuilder,
+            Root<CardEntity> root,
+            @Nullable String status,
+            @Nullable String bin,
+            @Nullable String issuerId,
+            @Nullable Instant startDate,
+            @Nullable Instant endDate
     ) {
         var predicates = new ArrayList<Predicate>();
         if (status != null) {

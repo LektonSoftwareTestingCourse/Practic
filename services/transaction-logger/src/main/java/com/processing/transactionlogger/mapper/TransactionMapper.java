@@ -7,6 +7,8 @@ import com.processing.transactionlogger.model.Transaction;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
@@ -102,7 +104,26 @@ public class TransactionMapper {
                 && Objects.equals(transaction.getDeclineReason(), request.declineReason())
                 && Objects.equals(transaction.getAuthCode(), request.authCode())
                 && Objects.equals(transaction.getProcessingTimeMs(), request.processingTimeMs())
-                && Objects.equals(transaction.getTransmissionDateTime(), request.transmissionDateTime());
+                && compareInstant(transaction.getTransmissionDateTime(), request.transmissionDateTime());
+    }
+
+    /** PostgreSQL timestamp(6) rounds values to the nearest microsecond. */
+    private static boolean compareInstant(Instant a, Instant b) {
+        if (a == null && b == null) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return roundToMicros(a).equals(roundToMicros(b));
+    }
+
+    private static Instant roundToMicros(Instant value) {
+        long roundedNanos = ((value.getNano() + 500L) / 1_000L) * 1_000L;
+        if (roundedNanos == 1_000_000_000L) {
+            return Instant.ofEpochSecond(value.getEpochSecond() + 1L);
+        }
+        return Instant.ofEpochSecond(value.getEpochSecond(), roundedNanos);
     }
 
     private static boolean compareBigDecimal(BigDecimal a, BigDecimal b) {
