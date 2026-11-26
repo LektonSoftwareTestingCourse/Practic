@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["id", "pan", "bin", "cardholderName", "expiryDate", "status", "currencyCode", "dailyLimit", "monthlyLimit", "availableBalance", "issuerId", "createdAt"],
+  "properties": {
+    "id": { "type": "string", "format": "uuid" },
+    "pan": { "type": "string", "pattern": "^[0-9]{16}$" },
+    "bin": { "type": "string", "pattern": "^[0-9]{6}$" },
+    "cardholderName": { "type": "string", "minLength": 1 },
+    "expiryDate": { "type": "string" },
+    "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE", "BLOCKED", "EXPIRED", "DELETED"] },
+    "currencyCode": { "type": "string", "pattern": "^[0-9]{3}$" },
+    "dailyLimit": { "type": "number", "minimum": 0 },
+    "monthlyLimit": { "type": "number", "minimum": 0 },
+    "availableBalance": { "type": "number" },
+    "issuerId": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" }
+  }
+}
