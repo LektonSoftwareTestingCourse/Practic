@@ -56,6 +56,10 @@ help:
 run: .env
 	$(DOCKER_COMPOSE) up -d
 
+# Практика 7: сборка с внесёнными дефектами (образы публичны в GHCR, сборка не требуется)
+run-bugs: .env
+	$(DOCKER_COMPOSE) -f docker-compose.yaml -f docker-compose.practice-7-bugs.yml up -d
+
 stop:
 	$(DOCKER_COMPOSE) down
 
