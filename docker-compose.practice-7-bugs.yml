@@ -10,8 +10,8 @@
 # обязателен: один из дефектов меняет миграции БД.
 services:
   authorization:
-    image: ghcr.io/${GHCR_USER:-local}/smp-authorization:practice-7-bugs
+    image: ghcr.io/lektonsoftwaretestingcourse/smp-authorization:practice-7-bugs
   card-management:
-    image: ghcr.io/${GHCR_USER:-local}/smp-card-management:practice-7-bugs
+    image: ghcr.io/lektonsoftwaretestingcourse/smp-card-management:practice-7-bugs
   switch:
-    image: ghcr.io/${GHCR_USER:-local}/smp-switch:practice-7-bugs
+    image: ghcr.io/lektonsoftwaretestingcourse/smp-switch:practice-7-bugs
